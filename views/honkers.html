@@ -1,0 +1,61 @@
+{{ template "header.html" . }}
+<main>
+<div class="info">
+<p>
+<form action="/submithonker" method="POST">
+<h3>add new honker</h3>
+<input type="hidden" name="CSRF" value="{{ .HonkerCSRF }}">
+<p><label for=url>url:</label><br>
+<input tabindex=1 type="text" name="url" value="" autocomplete=off>
+<p><label for=name>name:</label><br>
+<input tabindex=1 type="text" name="name" value="" placeholder="optional" autocomplete=off>
+<p><label for=combos>combos:</label><br>
+<input tabindex=1 type="text" name="combos" value="" placeholder="optional">
+<p><span><label class=button for="peep">skip subscribe:
+<input tabindex=1 type="checkbox" id="peep" name="peep" value="peep"><span></span></label></span>
+<p><label for="notes">notes:</label><br>
+<textarea tabindex=1 name="notes">
+</textarea>
+<p><button tabindex=1 name="add honker" value="add honker">add honker</button>
+</form>
+</div>
+{{ $honkercsrf := .HonkerCSRF }}
+<div class="info">
+<script>
+function expandstuff() {
+	var els = document.querySelectorAll(".honk details")
+	for (var i = 0; i < els.length; i++) {
+		els[i].open = true
+	}
+}
+</script>
+<p><button onclick="expandstuff()">expand</button>
+</div>
+{{ range .Honkers }}
+<section class="honk">
+<header>
+<img alt="avatar" src="/a?a={{ .XID }}">
+<p style="font-size: 1.8em"><a href="/h/{{ .Name }}">{{ .Name }}<a>
+</header>
+<p>
+<details>
+<p>url: <a href="{{ .XID }}" rel=noreferrer>{{ .XID }}</a>
+<p>flavor: {{ .Flavor }}
+<form action="/submithonker" method="POST">
+<input type="hidden" name="CSRF" value="{{ $honkercsrf }}">
+<input type="hidden" name="honkerid" value="{{ .ID }}">
+<p>name: <input type="text" name="name" value="{{ .Name }}">
+<p><label for="notes">notes:</label><br>
+<textarea name="notes">{{ .Meta.Notes }}</textarea>
+<p>combos: <input type="text" name="combos" value="{{ range .Combos }}{{ . }} {{end}}">
+<p>
+<button name="save" value="save">save</button>
+<button name="sub" value="sub">(re)sub</button>
+<button name="unsub" value="unsub">unsub</button>
+<button name="delete" value="delete">delete</button>
+</form>
+</details>
+<p>
+</section>
+{{ end }}
+</main>

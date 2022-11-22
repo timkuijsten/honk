@@ -1,0 +1,281 @@
+.\"
+.\" Copyright (c) 2019 Ted Unangst
+.\"
+.\" Permission to use, copy, modify, and distribute this software for any
+.\" purpose with or without fee is hereby granted, provided that the above
+.\" copyright notice and this permission notice appear in all copies.
+.\"
+.\" THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+.\" WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+.\" MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+.\" ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+.\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+.\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\"
+.Dd $Mdocdate$
+.Dt HONK 8
+.Os
+.Sh NAME
+.Nm honk
+.Nd honk administration
+.Sh DESCRIPTION
+The
+.Nm
+daemon processes messages from other federated servers.
+This is the admin manual.
+For user operation, see
+.Xr honk 1 .
+.Ss Setup
+.Pp
+Set up a TLS reverse proxy.
+.Nm
+can listen on TCP or unix sockets, but will not terminate TLS.
+https is a required component for federation.
+Also, http signature verification requires accurate time keeping.
+.Pp
+Make sure to pass the Host header, if necessary (as for nginx).
+.Bd -literal -offset indent
+proxy_set_header Host $http_host;
+.Ed
+.Ss Build
+Building
+.Nm
+requires a go compiler 1.13 and libsqlite.
+On
+.Ox
+this is the go and sqlite3 packages.
+Other platforms may require additional development libraries or headers
+to be installed.
+Run make.
+Please be patient.
+Even on fast machines, building from source can take several seconds.
+.Ss Options
+The following options control where
+.Nm
+looks for data.
+.Bl -tag -width datadirxdirx
+.It Fl datadir Ar dir
+The root data directory, where the database and other user data are stored.
+This directory contains all user data that persists across upgrades.
+Requires write access.
+Defaults to ".".
+.It Fl viewdir Ar dir
+The root view directory, where html and other templates are stored.
+The contents of this directory are generally replaced with each release.
+Read only.
+Defaults to ".".
+.El
+.Pp
+The following options control log output.
+Acceptable values include "stderr" (the default), "stdout", "null", "syslog",
+or a file name.
+syslog messages will be sent to the UUCP facility.
+.Bl -tag -width errorlogxlogx
+.It Fl errorlog Ar log
+The error log.
+Something bad has happened.
+.It Fl infolog Ar log
+The informative messages log.
+Something has happened, but probably not too bad.
+.It Fl debuglog Ar log
+The debug log.
+There's probably no reason to care.
+.It Fl log Ar log
+Set all three logs.
+.El
+.Ss Init
+Run the
+.Ic init
+command.
+This will create the database and ask four questions, as well as creating
+the initial user.
+See below about importing existing data.
+.Ss Operation
+Run honk.
+.Ss Customization
+The funzone contains fun flair that users may add to posts and profiles.
+Add custom memes (stickers) to the
+.Pa memes
+data directory.
+Image and video files are supported.
+Add custom emus (emoji) to the
+.Pa emus
+data directory.
+PNG and GIF files are supported.
+.Pp
+Site CSS may be overridden by creating a
+.Pa views/local.css
+file in the data directory.
+Site JS may similarly be included by creating
+.Pa views/local.js .
+A restart is required after changes.
+A site icon.png and favicon.ico will be served from the views directory
+in the data directory, if present.
+.Pp
+Custom HTML messages may be added to select pages by using the
+.Ic admin
+command.
+This interface is a little rough.
+A restart is required after changes.
+.Bl -tag -width tenletters
+.It server
+Displayed on the home page.
+.It about
+Displayed on the about page.
+.It login
+Displayed on the login form.
+.It avatar colors
+Four 32-bit hex colors (RGBA).
+.El
+.Pp
+.Ss User Admin
+New users can be added with the
+.Ic adduser
+command.
+This is discouraged.
+.Pp
+Passwords may be reset with the
+.Ic chpass Ar username
+command.
+.Pp
+Users may be deleted with the
+.Ic deluser Ar username
+command.
+.Ss Maintenance
+The database may grow large over time.
+The
+.Ic cleanup Op Ar days
+command exists to purge old external data, by default 30 days.
+This removes unreferenced, unsaved posts and attachments.
+It does not remove any original content.
+.Pp
+Backups may be performed by running
+.Ic backup dirname .
+Backups only include the minimal necessary information, such as user posts
+and follower information, but not external posts.
+.Pp
+Sometimes servers simply disappear, resulting in many errors trying to deliver
+undeliverable messages.
+Running
+.Ic unplug Ar hostname
+will delete all subscriptions and pending deliveries.
+.Ss Upgrade
+Stop the old honk process.
+Backup the database.
+Perform the upgrade with the
+.Ic upgrade
+command.
+Restart.
+.Pp
+The current version of the honk binary may be printed with the
+.Ic version
+command.
+.Ss Security
+.Nm
+is not currently hardened against SSRF, server side request forgery.
+Be mindful of what other services may be exposed via localhost or the
+local network.
+.Ss Development
+Development mode may be enabled or disabled by running
+.Ic devel Ar on|off .
+In devel mode, secure cookies are disabled, TLS certs are not verified,
+and templates are reloaded every request.
+.Ss Import
+Data may be imported and converted from other services using the
+.Ic import
+command.
+Currently supports Mastodon and Twitter exported data.
+Posts are imported and backdated to appear as old honks.
+The Mastodon following list is imported, but must be refollowed.
+.Pp
+To prepare a Mastodon data archive, extract the archive-longhash.tar.gz file.
+.Dl ./honk import username mastodon source-directory
+.Pp
+To prepare a Twitter data archive, extract the twitter-longhash.zip file.
+After unzipping the data archive, navigate to the tweet_media directory
+and unzip any zip files contained within.
+.Dl ./honk import username twitter source-directory
+.Ss Advanced Options
+Advanced configuration values may be set by running the
+.Ic setconfig Ar key value
+command.
+For example, to increase the fast timeout value from 5 seconds to 10:
+.Dl ./honk setconfig fasttimeout 10
+.Pp
+To support separate mentions without a subdomain,
+e.g. @user@example.com and https://honk.example.com/u/user,
+set config key 'masqname' to 'example.com'.
+Route
+.Pa /.well-known/webfinger
+from the top domain to honk.
+.Pp
+Custom URL seperators (not "u" and "h") may be specified by adding
+"usersep" and "honksep" options to the config table.
+e.g. example.com/users/username/honk/somehonk instead of
+example.com/u/username/h/somehonk.
+.Sh FILES
+.Nm
+files are split between the data directory and the view directory.
+Both default to "." but may be specified by command line options.
+.Pp
+The data directory contains:
+.Bl -tag -width views/local.css
+.It Pa honk.db
+The main database.
+.It Pa blob.db
+Media and attachment storage.
+.It Pa emus
+Custom emoji.
+.It Pa memes
+Stickers and such.
+.It Pa views/local.js
+Locally customized JS.
+.It Pa views/local.css
+Locally customized CSS.
+.El
+.Pp
+The view directory contains:
+.Bl -tag -width views
+.It Pa views
+HTML templates and CSS files.
+.El
+.Sh EXAMPLES
+This series of commands creates a new database, sets a friendly
+welcome message, and runs honk.
+.Bd -literal -offset indent
+honk-v98> make
+honk-v98> ./honk -datadir ../honkdata init
+username: puffy
+password: OxychromaticBlowfishSwatDynamite
+listen address: /var/www/honk.sock
+server name: honk.example.com
+honk-v98> ./honk -datadir ../honkdata admin
+honk-v98> date; ./honk -log honk.log -datadir ../honkdata
+.Ed
+.Pp
+The views directory includes a sample pleroma.css to change color scheme.
+.Bd -literal -offset indent
+honk-v98> mkdir ../honkdata/views
+honk-v98> cp views/pleroma.css ../honkdata/views/local.css
+.Ed
+.Pp
+Upgrade to the next version.
+Clean things up a bit.
+.Bd -literal -offset indent
+datadir> cp honk.db backup.db
+datadir> cd ../honk-v99
+honk-v99> make
+honk-v99> ./honk -datadir ../honkdata upgrade
+honk-v99> ./honk -datadir ../honkdata cleanup
+honk-v99> date; ./honk -log honk.log -datadir ../honkdata
+.Ed
+.Sh ENVIRONMENT
+Image processing and scaling requires considerable memory.
+It is recommended to adjust the datasize ulimit to at least 1GB.
+.Sh SEE ALSO
+.Xr intro 1 ,
+.Xr honk 1
+.Sh CAVEATS
+There's no online upgrade capability.
+Upgrades may result in minutes of downtime.

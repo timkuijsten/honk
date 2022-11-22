@@ -1,0 +1,55 @@
+{{ template "header.html" . }}
+<main>
+<div class="info" id="infobox">
+<div id="srvmsg">
+{{ if .Name }}
+<p>{{ .Name }} <span style="margin-left:1em;"><a href="/u/{{ .Name }}/rss">rss</a></span>
+<p>{{ .WhatAbout }}
+{{ end }}
+<p>{{ .ServerMessage }}
+</div>
+{{ if .HonkCSRF }}
+{{ template "honkform.html" . }}
+<script>
+var csrftoken = {{ .HonkCSRF }}
+var honksforpage = { }
+var curpagestate = { name: "{{ .PageName }}", arg : "{{ .PageArg }}" }
+var tophid = { }
+tophid[curpagestate.name + ":" + curpagestate.arg] = "{{ .TopHID }}"
+var servermsgs = { }
+servermsgs[curpagestate.name + ":" + curpagestate.arg] = "{{ .ServerMessage }}"
+</script>
+<script src="/honkpage.js{{ .JSParam }}"></script>
+{{ end }}
+<script>
+function playit(elem, word, wordlist, xid) {
+	import('/wonk.js').then(module => {
+		makeaguess = module.makeaguess
+		module.addguesscontrols(elem, word, wordlist, xid)
+	})
+}
+</script>
+{{ if .LocalJSParam }}
+<script src="/local.js{{ .LocalJSParam }}"></script>
+{{ end }}
+</div>
+{{ if and .HonkCSRF (not .IsPreview) }}
+<div class="info" id="refreshbox">
+<p><button onclick="refreshhonks(this)">refresh</button><span></span>
+<button onclick="oldestnewest(this)">scroll down</button>
+</div>
+{{ if eq .ServerMessage "one honk maybe more" }} <script> hideelement("refreshbox")</script> {{ end }}
+{{ end }}
+<div id="honksonpage">
+<div>
+{{ $BonkCSRF := .HonkCSRF }}
+{{ $IsPreview := .IsPreview }}
+{{ $MapLink := .MapLink }}
+{{ $Badonk := .User.Options.Reaction }}
+{{ $OmitImages := .User.Options.OmitImages }}
+{{ range .Honks }}
+{{ template "honk.html" map "Honk" . "MapLink" $MapLink "BonkCSRF" $BonkCSRF "IsPreview" $IsPreview "Badonk" $Badonk "OmitImages" $OmitImages }}
+{{ end }}
+</div>
+</div>
+</main>

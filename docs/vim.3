@@ -1,0 +1,81 @@
+.\"
+.\" Copyright (c) 2019 Ted Unangst
+.\"
+.\" Permission to use, copy, modify, and distribute this software for any
+.\" purpose with or without fee is hereby granted, provided that the above
+.\" copyright notice and this permission notice appear in all copies.
+.\"
+.\" THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+.\" WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+.\" MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+.\" ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+.\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+.\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\"
+.Dd $Mdocdate$
+.Dt VIM 3
+.Os
+.Sh NAME
+.Nm vim
+.Nd vital improvements module
+.Sh DESCRIPTION
+The vital improvements module,
+.Nm ,
+is used to customize and extend honk in such rare cases as the
+existing functionality proves insufficient.
+.Ss Files
+.Bl -tag -width deliverator.go
+.It activity.go
+Conversion to and from ActivityPub format and interop with other
+implementations.
+.It admin.go
+The console admin interface.
+.It avatar.go
+Code to generate blocky avatar images.
+.It backend.go
+Interface to the image resizing backend helper process.
+.It bloat.go
+Bad stuff.
+.It database.go
+Loading and saving things to database.
+.It deliverator.go
+Sending messages and handling retries.
+.It fun.go
+All sorts of fun stuff.
+.It hfcs.go
+Filtering framework.
+.It honk.go
+Just a few data types.
+.It hoot.go
+Twitter scraper.
+.It import.go
+Importers from other service data dumps.
+.It markitzero.go
+Markdown converter.
+.It schema.go
+Generated from schema.sql.
+.It sensors.go
+Monitor memory and CPU.
+.It skulduggery.go
+Reduce some stupidity.
+.It unveil.go
+OpenBSD pledge and unveil.
+.It upgradedb.go
+Upgrade between schema versions.
+.It util.go
+Boring code.
+.It web.go
+The web interface.
+.El
+.Ss Schema
+The current schema is stored in
+.Pa schema.sql .
+.Pp
+After changing the schema, edit
+.Pa upgradedb.go
+to update
+.Va myVersion
+and add relevant update statements to the bottom of the large switch.
+.Sh SEE ALSO
+.Xr honk 3
