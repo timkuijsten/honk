@@ -97,8 +97,11 @@ func reverbolate(userid int64, honks []*Honk) {
 			}
 		}
 		if user != nil {
+			hset := []string{}
+			if h.Honker != user.URL {
+				hset = append(hset, "@"+h.Handle)
+			}
 			if user.Options.MentionAll {
-				hset := []string{"@" + h.Handle}
 				for _, a := range h.Audience {
 					if a == h.Honker || a == user.URL {
 						continue
@@ -109,10 +112,8 @@ func reverbolate(userid int64, honks []*Honk) {
 						hset = append(hset, hand)
 					}
 				}
-				h.Handles = strings.Join(hset, " ")
-			} else if h.Honker != user.URL {
-				h.Handles = "@" + h.Handle
 			}
+			h.Handles = strings.Join(hset, " ")
 		}
 		if h.URL == "" {
 			h.URL = h.XID

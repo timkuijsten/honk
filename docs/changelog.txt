@@ -2,6 +2,12 @@ changelog
 
 === next
 
++ Fix argv for chpass.
+
++ Avoid self mention in reply all.
+
++ Fix markdown links with parens.
+
 + Add a default icon.png.
 
 + Try to fix hoot again because Twitter did a Twitter.
