@@ -2,7 +2,7 @@ function encode(hash) {
         var s = []
         for (var key in hash) {
                 var val = hash[key]
-                s.push(escape(key) + "=" + escape(val))
+                s.push(encodeURIComponent(key) + "=" + encodeURIComponent(val))
         }
         return s.join("&")
 }

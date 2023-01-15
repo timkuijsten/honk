@@ -11,7 +11,7 @@
 <a href="{{ .Honker }}" rel=noreferrer>
 {{ end }}
 <img alt="" src="/a?a={{ .Honker}}">
-{{ if $bonkcsrf }} </a> {{ end }}
+</a>
 {{ if .Oonker }}
 {{ if $bonkcsrf }}
 <a class="honkerlink" href="/h?xid={{ .Oonker }}" data-xid="{{ .Oonker }}">
@@ -19,7 +19,7 @@
 <a href="{{ .Oonker }}" rel=noreferrer>
 {{ end }}
 <img alt="" src="/a?a={{ .Oonker}}">
-{{ if $bonkcsrf }} </a> {{ end }}
+</a>
 {{ end }}
 <p>
 {{ if $bonkcsrf }}
@@ -52,7 +52,7 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 </header>
 <p>
 <details class="noise" {{ .Open }} >
-<summary>{{ .HTPrecis }}<p></summary>
+<summary>{{ .HTPrecis }}</summary>
 <p>{{ .HTPrecis }}
 <p class="content">{{ .HTML }}
 {{ with .Time }}

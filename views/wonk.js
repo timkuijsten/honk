@@ -6,7 +6,7 @@ export function addguesscontrols(elem, word, wordlist, xid) {
 	host.guesses = []
 	host.xid = xid
 	var xhr = new XMLHttpRequest()
-        xhr.open("GET", "/bloat/wonkles?w=" + escape(wordlist))
+        xhr.open("GET", "/bloat/wonkles?w=" + encodeURIComponent(wordlist))
         xhr.responseType = "json"
         xhr.onload = function() { 
 		var wordlist = xhr.response.wordlist

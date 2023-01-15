@@ -53,7 +53,6 @@ type WhatAbout struct {
 type UserOptions struct {
 	SkinnyCSS  bool   `json:",omitempty"`
 	OmitImages bool   `json:",omitempty"`
-	Avahex     bool   `json:",omitempty"`
 	MentionAll bool   `json:",omitempty"`
 	Avatar     string `json:",omitempty"`
 	Banner     string `json:",omitempty"`
@@ -69,6 +68,7 @@ type KeyInfo struct {
 }
 
 const serverUID int64 = -2
+const readyLuserOne int64 = 1
 
 type Honk struct {
 	ID       int64
