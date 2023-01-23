@@ -9,5 +9,5 @@ require (
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
 	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4
 	humungus.tedunangst.com/r/go-sqlite3 v1.1.3
-	humungus.tedunangst.com/r/webs v0.6.59
+	humungus.tedunangst.com/r/webs v0.6.60
 )

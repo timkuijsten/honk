@@ -2,6 +2,10 @@ changelog
 
 === next
 
++ Fix http signatures for GET requests.
+
++ Fix adjacent mentions.
+
 + Fix argv for chpass.
 
 + Avoid self mention in reply all.
