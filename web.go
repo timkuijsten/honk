@@ -50,16 +50,18 @@ var honkSep = "h"
 
 var develMode = false
 
-func getuserstyle(u *login.UserInfo) template.CSS {
+var allemus []Emu
+
+func getuserstyle(u *login.UserInfo) template.HTMLAttr {
 	if u == nil {
 		return ""
 	}
 	user, _ := butwhatabout(u.Username)
-	css := template.CSS("")
+	class := template.HTMLAttr("")
 	if user.Options.SkinnyCSS {
-		css += "main { max-width: 700px; }\n"
+		class += `class="skinny"`
 	}
-	return css
+	return class
 }
 
 func getmaplink(u *login.UserInfo) string {
@@ -80,6 +82,7 @@ func getInfo(r *http.Request) map[string]interface{} {
 	templinfo["LocalStyleParam"] = getassetparam(dataDir + "/views/local.css")
 	templinfo["JSParam"] = getassetparam(viewDir + "/views/honkpage.js")
 	templinfo["LocalJSParam"] = getassetparam(dataDir + "/views/local.js")
+	templinfo["MiscJSParam"] = getassetparam(dataDir + "/views/misc.js")
 	templinfo["ServerName"] = serverName
 	templinfo["IconName"] = iconName
 	templinfo["UserSep"] = userSep
@@ -146,6 +149,15 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	honkpage(w, u, honks, templinfo)
+}
+
+func showemus(w http.ResponseWriter, r *http.Request) {
+	templinfo := getInfo(r)
+	templinfo["Emus"] = allemus
+	err := readviews.Execute(w, "emus.html", templinfo)
+	if err != nil {
+		elog.Print(err)
+	}
 }
 
 func showfunzone(w http.ResponseWriter, r *http.Request) {
@@ -1122,6 +1134,11 @@ func saveuser(w http.ResponseWriter, r *http.Request) {
 	} else {
 		options.MentionAll = false
 	}
+	if r.FormValue("inlineqts") == "inlineqts" {
+		options.InlineQuotes = true
+	} else {
+		options.InlineQuotes = false
+	}
 	if r.FormValue("maps") == "apple" {
 		options.MapLink = "apple"
 	} else {
@@ -1429,7 +1446,7 @@ func edithonkpage(w http.ResponseWriter, r *http.Request) {
 	templinfo["Noise"] = noise
 	templinfo["SavedPlace"] = honk.Place
 	if tm := honk.Time; tm != nil {
-		templinfo["ShowTime"] = ";"
+		templinfo["ShowTime"] = " "
 		templinfo["StartTime"] = tm.StartTime.Format("2006-01-02 15:04")
 		if tm.Duration != 0 {
 			templinfo["Duration"] = tm.Duration
@@ -1751,7 +1768,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 		templinfo["Noise"] = r.FormValue("noise")
 		templinfo["SavedFile"] = donkxid
 		if tm := honk.Time; tm != nil {
-			templinfo["ShowTime"] = ";"
+			templinfo["ShowTime"] = " "
 			templinfo["StartTime"] = tm.StartTime.Format("2006-01-02 15:04")
 			if tm.Duration != 0 {
 				templinfo["Duration"] = tm.Duration
@@ -2414,6 +2431,37 @@ func bgmonitor() {
 	}
 }
 
+func addcspheaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self'; report-uri /csp-violation")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func emuinit() {
+	var emunames []string
+	dir, err := os.Open(dataDir + "/emus")
+	if err == nil {
+		emunames, _ = dir.Readdirnames(0)
+		dir.Close()
+	}
+	for _, e := range emunames {
+		if len(e) <= 4 {
+			continue
+		}
+		ext := e[len(e)-4:]
+		emu := Emu{
+			ID:   fmt.Sprintf("/emu/%s", e),
+			Name: e[:len(e)-4],
+			Type: "image/" + ext[1:],
+		}
+		allemus = append(allemus, emu)
+	}
+	sort.Slice(allemus, func(i, j int) bool {
+		return allemus[i].Name < allemus[j].Name
+	})
+}
+
 func serve() {
 	db := opendatabase()
 	login.Init(login.InitArgs{Db: db, Logger: ilog, Insecure: develMode, SameSiteStrict: !develMode})
@@ -2428,6 +2476,7 @@ func serve() {
 	go tracker()
 	go bgmonitor()
 	loadLingo()
+	emuinit()
 
 	readviews = templates.Load(develMode,
 		viewDir+"/views/honkpage.html",
@@ -2446,6 +2495,7 @@ func serve() {
 		viewDir+"/views/msg.html",
 		viewDir+"/views/header.html",
 		viewDir+"/views/onts.html",
+		viewDir+"/views/emus.html",
 		viewDir+"/views/honkpage.js",
 	)
 	if !develMode {
@@ -2466,6 +2516,7 @@ func serve() {
 	}
 
 	mux := mux.NewRouter()
+	mux.Use(addcspheaders)
 	mux.Use(login.Checker)
 
 	mux.Handle("/api", login.TokenRequired(http.HandlerFunc(apihandler)))
@@ -2503,6 +2554,7 @@ func serve() {
 	getters.HandleFunc("/style.css", serveviewasset)
 	getters.HandleFunc("/honkpage.js", serveviewasset)
 	getters.HandleFunc("/wonk.js", serveviewasset)
+	getters.HandleFunc("/misc.js", serveviewasset)
 	getters.HandleFunc("/local.css", servedataasset)
 	getters.HandleFunc("/local.js", servedataasset)
 	getters.HandleFunc("/icon.png", servedataasset)
@@ -2545,6 +2597,7 @@ func serve() {
 	loggedin.HandleFunc("/t", showconvoy)
 	loggedin.HandleFunc("/q", showsearch)
 	loggedin.HandleFunc("/hydra", webhydra)
+	loggedin.HandleFunc("/emus", showemus)
 	loggedin.Handle("/submithonker", login.CSRFWrap("submithonker", http.HandlerFunc(submithonker)))
 
 	err = http.Serve(listener, mux)

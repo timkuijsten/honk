@@ -1,10 +1,16 @@
+var csrftoken = ""
+var honksforpage = { }
+var curpagestate = { name: "", arg : "" }
+var tophid = { }
+var servermsgs = { }
+
 function encode(hash) {
-        var s = []
-        for (var key in hash) {
-                var val = hash[key]
-                s.push(encodeURIComponent(key) + "=" + encodeURIComponent(val))
-        }
-        return s.join("&")
+	var s = []
+	for (var key in hash) {
+		var val = hash[key]
+		s.push(encodeURIComponent(key) + "=" + encodeURIComponent(val))
+	}
+	return s.join("&")
 }
 function post(url, data) {
 	var x = new XMLHttpRequest()
@@ -268,6 +274,77 @@ function relinklinks() {
 		el.onclick = pageswitcher("honker", xid)
 		el.classList.remove("honkerlink")
 	}
+
+	els = document.querySelectorAll("#honksonpage article button")
+	els.forEach(function(el) {
+		var honk = el.closest("article")
+		var convoy = honk.dataset.convoy
+		var hname = honk.dataset.hname
+		var xid = honk.dataset.xid
+		var id = Number(honk.dataset.id)
+
+		if (!(id > 0)) {
+			console.error("could not determine honk id")
+			return
+		}
+
+		if (el.classList.contains("unbonk")) {
+			el.onclick = function() {
+				unbonk(el, xid);
+			}
+		} else if (el.classList.contains("bonk")) {
+			el.onclick = function() {
+				bonk(el, xid)
+			}
+		} else if (el.classList.contains("honkback")) {
+			el.onclick = function() {
+				return showhonkform(el, xid, hname)
+			}
+		} else if (el.classList.contains("mute")) {
+			el.onclick = function() {
+				muteit(el, convoy);
+			}
+		} else if (el.classList.contains("evenmore")) {
+			var more = document.querySelector("#evenmore"+id);
+			el.onclick = function() {
+				more.classList.toggle("hide");
+			}
+		} else if (el.classList.contains("zonk")) {
+			el.onclick = function() {
+				zonkit(el, xid);
+			}
+		} else if (el.classList.contains("flogit-deack")) {
+			el.onclick = function() {
+				flogit(el, "deack", xid);
+			}
+		} else if (el.classList.contains("flogit-ack")) {
+			el.onclick = function() {
+				flogit(el, "ack", xid);
+			}
+		} else if (el.classList.contains("flogit-unsave")) {
+			el.onclick = function() {
+				flogit(el, "unsave", xid);
+			}
+		} else if (el.classList.contains("flogit-save")) {
+			el.onclick = function() {
+				flogit(el, "save", xid);
+			}
+		} else if (el.classList.contains("flogit-untag")) {
+			el.onclick = function() {
+				flogit(el, "untag", xid);
+			}
+		} else if (el.classList.contains("flogit-react")) {
+			el.onclick = function() {
+				flogit(el, "react", xid);
+			}
+		} else if (el.classList.contains("playit")) {
+			var noise = el.dataset.noise
+			var wonk = el.dataset.wonk
+			el.onclick = function() {
+				playit(el, noise, wonk, xid)
+			}
+		}
+	})
 }
 (function() {
 	var el = document.getElementById("homelink")
@@ -363,3 +440,81 @@ function fillcheckin() {
 		}, gpsoptions)
 	}
 }
+function playit(elem, word, wordlist, xid) {
+	import('/wonk.js').then(module => {
+		makeaguess = module.makeaguess
+		module.addguesscontrols(elem, word, wordlist, xid)
+	})
+}
+function addemu(elem) {
+	const data = elem.alt
+	const box = document.getElementById("honknoise");
+	box.value += data;
+}
+function loademus() {
+	div = document.getElementById("emupicker")
+	request = new XMLHttpRequest()
+	request.open('GET', '/emus')
+	request.onload = function() {
+		div.innerHTML = request.responseText
+		div.querySelectorAll(".emu").forEach(function(el) {
+			el.onclick = function() {
+				addemu(el)
+			}
+		})
+	}
+	if (div.style.display === "none") {
+		div.style.display = "block";
+	} else {
+		div.style.display = "none";
+	}
+	request.send()
+}
+
+// init
+(function() {
+	var me = document.currentScript;
+	csrftoken = me.dataset.csrf
+	curpagestate.name = me.dataset.pagename
+	curpagestate.arg = me.dataset.pagearg
+	tophid[curpagestate.name + ":" + curpagestate.arg] = me.dataset.tophid
+	servermsgs[curpagestate.name + ":" + curpagestate.arg] = me.dataset.srvmsg
+
+	var totop = document.querySelector(".nophone")
+	if (totop) {
+		totop.onclick = function() {
+			window.scrollTo(0,0)
+		}
+	}
+
+	var refreshbox = document.getElementById("refreshbox")
+	if (refreshbox) {
+		refreshbox.querySelectorAll("button").forEach(function(el) {
+			if (el.classList.contains("refresh")) {
+				el.onclick = function() {
+					refreshhonks(el)
+				}
+			} else if (el.classList.contains("scrolldown")) {
+				el.onclick = function() {
+					oldestnewest(el)
+				}
+			}
+		})
+
+		if (me.dataset.srvmsg == "one honk maybe more") {
+			hideelement(refreshbox)
+		}
+	}
+
+	var td = document.getElementById("timedescriptor")
+	document.getElementById("addtimebutton").onclick = function() {
+		td.classList.toggle("hide")
+	}
+	document.getElementById("honkingtime").onclick = function() {
+		return showhonkform()
+	}
+	document.getElementById("checkinbutton").onclick = fillcheckin
+	document.getElementById("emuload").onclick = loademus
+	document.querySelector("#donker input").onchange = updatedonker
+	document.querySelector("button[name=cancel]").onclick = cancelhonking
+})();

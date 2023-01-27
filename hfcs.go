@@ -107,7 +107,7 @@ func filtcachefiller(userid int64) (afiltermap, bool) {
 				expflush = filt.Expiration
 			}
 		}
-		if t := filt.Text; t != "" {
+		if t := filt.Text; t != "" && t != "." {
 			wordfront := t[0] != '#'
 			wordtail := true
 			t = "(?i:" + t + ")"
@@ -314,7 +314,7 @@ func matchfilterX(h *Honk, f *Filter) string {
 			rv += " announce"
 		}
 	}
-	if match && f.Text != "" {
+	if match && f.Text != "" && f.Text != "." {
 		match = false
 		re := f.re_text
 		m := re.FindString(h.Precis)
@@ -332,6 +332,13 @@ func matchfilterX(h *Honk, f *Filter) string {
 		if m != "" {
 			match = true
 			rv = m
+		}
+	}
+	if match && f.Text == "." {
+		match = false
+		if h.Precis != "" {
+			match = true
+			rv = h.Precis
 		}
 	}
 	if match {

@@ -253,6 +253,11 @@ input[type=file] {
 .honk	details.actions summary {
 		color: var(--fg-subtle);
 }
+
+#emupicker{height:300px;overflow-y:scroll;padding:3px;background:var(--bg-dark);border:solid 5px var(--fg-subtle);text-align:center;display:none;}
+#emupicker img{margin:0;}
+.emuload{background:var(--bg-page);padding:0.5em;}
+
 .subtle .noise {
 		color: var(--fg-subtle);
 		font-size: 0.8em;
@@ -339,4 +344,45 @@ img.emu {
 		--fg-subtle: black;
 		--fg-limited: #a79;
 	}
+}
+
+/*
+ * CSP: style-src: self
+ */
+
+li.details {
+	list-style-type: none;
+	margin-left: -1em;
+}
+
+.left1em {
+	margin-left: 1em;
+}
+
+.hide {
+	display: none;
+}
+
+.textright {
+	text-align: right;
+}
+
+.font08em {
+	font-size: 0.8em;
+}
+
+.font18em {
+	font-size: 1.8em;
+}
+
+.wsnowrap {
+	white-space: nowrap;
+}
+
+.skinny main {
+	max-width: 700px;
+}
+
+.fontmonospace {
+	font-family: monospace;
 }

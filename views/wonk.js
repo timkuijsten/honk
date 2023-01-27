@@ -17,7 +17,10 @@ export function addguesscontrols(elem, word, wordlist, xid) {
 		}
 		host.validGuesses = validguesses
 		var div = document.createElement( 'div' );
-		div.innerHTML = "<p><input> <button onclick='return makeaguess(this)'>guess</button>"
+		div.innerHTML = "<p><input> <button>guess</button>"
+		div.querySelector('button').onclick = function() {
+			makeaguess(this)
+		}
 		host.append(div)
 		elem.remove()
 	}
@@ -57,7 +60,7 @@ export function makeaguess(btn) {
 		}
 
 		var div = document.createElement( 'div' );
-		div.innerHTML = "<p style='font-family: monospace'>" + res
+		div.innerHTML = "<p class='fontmonospace'>" + res
 		host.append(div)
 		host.guesses.push(obfu)
 	} else {
@@ -76,7 +79,10 @@ export function makeaguess(btn) {
 		if (typeof(csrftoken) != "undefined")
 			post("/zonkit", encode({"CSRF": csrftoken, "wherefore": "wonk", "guesses": host.guesses.join("<p>"), "what": host.xid}))
 	} else {
-		div.innerHTML = "<p><input> <button onclick='return makeaguess(this)'>guess</button>"
+		div.innerHTML = "<p><input> <button>guess</button>"
+		div.querySelector('button').onclick = function() {
+			makeaguess(this)
+		}
 	}
 	host.append(div)
 	btn.parentElement.remove()
