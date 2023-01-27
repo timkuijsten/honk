@@ -346,24 +346,6 @@ function relinklinks() {
 		}
 	})
 }
-(function() {
-	var el = document.getElementById("homelink")
-	el.onclick = pageswitcher("home", "")
-	el = document.getElementById("atmelink")
-	el.onclick = pageswitcher("atme", "")
-	el = document.getElementById("firstlink")
-	el.onclick = pageswitcher("first", "")
-	el = document.getElementById("savedlink")
-	el.onclick = pageswitcher("saved", "")
-	el = document.getElementById("longagolink")
-	el.onclick = pageswitcher("longago", "")
-	relinklinks()
-	window.onpopstate = statechanger
-	history.replaceState(curpagestate, "some title", "")
-})();
-(function() {
-	hideelement("donkdescriptor")
-})();
 function showhonkform(elem, rid, hname) {
 	var form = lehonkform
 	form.style = "display: block"
@@ -480,6 +462,17 @@ function loademus() {
 	tophid[curpagestate.name + ":" + curpagestate.arg] = me.dataset.tophid
 	servermsgs[curpagestate.name + ":" + curpagestate.arg] = me.dataset.srvmsg
 
+	var el = document.getElementById("homelink")
+	el.onclick = pageswitcher("home", "")
+	el = document.getElementById("atmelink")
+	el.onclick = pageswitcher("atme", "")
+	el = document.getElementById("firstlink")
+	el.onclick = pageswitcher("first", "")
+	el = document.getElementById("savedlink")
+	el.onclick = pageswitcher("saved", "")
+	el = document.getElementById("longagolink")
+	el.onclick = pageswitcher("longago", "")
+
 	var totop = document.querySelector(".nophone")
 	if (totop) {
 		totop.onclick = function() {
@@ -517,4 +510,10 @@ function loademus() {
 	document.getElementById("emuload").onclick = loademus
 	document.querySelector("#donker input").onchange = updatedonker
 	document.querySelector("button[name=cancel]").onclick = cancelhonking
+
+	relinklinks()
+	window.onpopstate = statechanger
+	history.replaceState(curpagestate, "some title", "")
+
+	hideelement("donkdescriptor")
 })();
