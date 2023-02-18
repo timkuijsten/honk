@@ -8,6 +8,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.13
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
 	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4
+	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e
 	humungus.tedunangst.com/r/go-sqlite3 v1.1.3
 	humungus.tedunangst.com/r/webs v0.6.60
 )
