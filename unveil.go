@@ -18,53 +18,57 @@
 
 package main
 
-/*
-#include <stdlib.h>
-#include <unistd.h>
-*/
-import "C"
-
 import (
 	"fmt"
+	"syscall"
 	"unsafe"
 )
 
-func Unveil(path string, perms string) error {
-	cpath := C.CString(path)
-	defer C.free(unsafe.Pointer(cpath))
-	cperms := C.CString(perms)
-	defer C.free(unsafe.Pointer(cperms))
+const (
+	SYS_PLEDGE = 108
+	SYS_UNVEIL = 114
+)
 
-	rv, err := C.unveil(cpath, cperms)
-	if rv != 0 {
-		return fmt.Errorf("unveil(%s, %s) failure (%d)", path, perms, err)
+func xunveil(path, perms string) {
+	pathPtr, err := syscall.BytePtrFromString(path)
+	if err != nil {
+		panic(fmt.Errorf("unveil(%s, %s) failure (%v)", path, perms, err))
 	}
-	return nil
+	permsPtr, err := syscall.BytePtrFromString(perms)
+	if err != nil {
+		panic(fmt.Errorf("unveil(%s, %s) failure (%v)", path, perms, err))
+	}
+
+	_, _, e := syscall.Syscall(SYS_UNVEIL, uintptr(unsafe.Pointer(pathPtr)), uintptr(unsafe.Pointer(permsPtr)), 0)
+	if e != 0 {
+		panic(fmt.Errorf("unveil(%s, %s) failure (%d)", path, perms, e))
+	}
 }
 
-func Pledge(promises string) error {
-	cpromises := C.CString(promises)
-	defer C.free(unsafe.Pointer(cpromises))
+func xpledge(promises string) {
+	var expr unsafe.Pointer
 
-	rv, err := C.pledge(cpromises, nil)
-	if rv != 0 {
-		return fmt.Errorf("pledge(%s) failure (%d)", promises, err)
+	pptr, err := syscall.BytePtrFromString(promises)
+	if err != nil {
+		panic(fmt.Errorf("pledge(%s) failure (%v)", promises, err))
 	}
-	return nil
+
+	_, _, e := syscall.Syscall(SYS_PLEDGE, uintptr(unsafe.Pointer(pptr)), uintptr(expr), 0)
+	if e != 0 {
+		panic(fmt.Errorf("pledge(%s) failure (%d)", promises, e))
+	}
 }
 
 func init() {
 	preservehooks = append(preservehooks, func() {
-		Unveil("/etc/ssl", "r")
+		xunveil("/etc/ssl", "r")
 		if viewDir != dataDir {
-			Unveil(viewDir, "r")
+			xunveil(viewDir, "r")
 		}
-		Unveil(dataDir, "rwc")
-		C.unveil(nil, nil)
-		Pledge("stdio rpath wpath cpath flock dns inet unix")
+		xunveil(dataDir, "rwc")
+		xpledge("stdio rpath wpath cpath flock dns inet unix")
 	})
 	backendhooks = append(backendhooks, func() {
-		C.unveil(nil, nil)
-		Pledge("stdio unix")
+		xpledge("stdio unix")
 	})
 }
