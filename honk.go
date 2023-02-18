@@ -104,8 +104,6 @@ type Honk struct {
 	Time     *Time
 	Mentions []Mention
 	Badonks  []Badonk
-	Wonkles  string
-	Guesses  template.HTML
 }
 
 type Badonk struct {
@@ -178,10 +176,6 @@ func (honk *Honk) IsUntagged() bool {
 
 func (honk *Honk) IsReacted() bool {
 	return honk.Flags&flagIsReacted != 0
-}
-
-func (honk *Honk) IsWonked() bool {
-	return honk.Flags&flagIsWonked != 0
 }
 
 type Donk struct {

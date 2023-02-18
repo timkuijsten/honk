@@ -485,9 +485,7 @@ func donksforhonks(honks []*Honk) {
 				continue
 			}
 		case "wonkles":
-			h.Wonkles = j
 		case "guesses":
-			h.Guesses = template.HTML(j)
 		case "oldrev":
 		default:
 			elog.Printf("unknown meta genus: %s", genus)
@@ -894,20 +892,6 @@ func saveextras(tx *sql.Tx, h *Honk) error {
 		}
 		if err != nil {
 			elog.Printf("error saving mentions: %s", err)
-			return err
-		}
-	}
-	if w := h.Wonkles; w != "" {
-		_, err := tx.Stmt(stmtSaveMeta).Exec(h.ID, "wonkles", w)
-		if err != nil {
-			elog.Printf("error saving wonkles: %s", err)
-			return err
-		}
-	}
-	if g := h.Guesses; g != "" {
-		_, err := tx.Stmt(stmtSaveMeta).Exec(h.ID, "guesses", g)
-		if err != nil {
-			elog.Printf("error saving guesses: %s", err)
 			return err
 		}
 	}

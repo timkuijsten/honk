@@ -181,9 +181,6 @@ func reverbolate(userid int64, honks []*Honk) {
 
 		h.HTPrecis = template.HTML(h.Precis)
 		h.HTML = template.HTML(h.Noise)
-		if h.What == "wonked" {
-			h.HTML = "? wonk ?"
-		}
 		if redo := relingo[h.What]; redo != "" {
 			h.What = redo
 		}
@@ -290,12 +287,14 @@ func imaginate(honk *Honk) {
 	htf.String(honk.Noise)
 }
 
+var re_dangerous = regexp.MustCompile("^[a-zA-Z]{2}:")
+
 func translate(honk *Honk) {
 	if honk.Format == "html" {
 		return
 	}
 	noise := honk.Noise
-	if strings.HasPrefix(noise, "DZ:") {
+	if re_dangerous.MatchString(noise) {
 		idx := strings.Index(noise, "\n")
 		if idx == -1 {
 			honk.Precis = noise
@@ -457,7 +456,7 @@ func memetize(honk *Honk) {
 	honk.Noise = re_memes.ReplaceAllStringFunc(honk.Noise, repl)
 }
 
-var re_quickmention = regexp.MustCompile("(^|[ \n])@[[:alnum:]]+([ \n.]|$)")
+var re_quickmention = regexp.MustCompile("(^|[ \n])@[[:alnum:]]+([ \n.,']|$)")
 
 func quickrename(s string, userid int64) string {
 	nonstop := true
@@ -472,7 +471,8 @@ func quickrename(s string, userid int64) string {
 			prefix += "@"
 			m = m[1:]
 			tail := ""
-			if last := m[len(m)-1]; last == ' ' || last == '\n' || last == '.' {
+			if last := m[len(m)-1]; last == ' ' || last == '\n' ||
+				last == '.' || last == ',' || last == '\'' {
 				tail = m[len(m)-1:]
 				m = m[:len(m)-1]
 			}

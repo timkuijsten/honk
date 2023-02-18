@@ -89,15 +89,6 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ end }}
 </details>
 {{ end }}
-{{ if eq .Honk.What "wonked" }}
-<p>
-{{ if and $bonkcsrf .Honk.IsWonked }}
-{{ .Honk.Guesses }}
-<p>{{ .Honk.Noise }}
-{{ else }}
-<button class="playit" data-noise="{{ .Honk.Noise }}" data-wonk="{{ .Honk.Wonkles }}">it's play time!</button>
-{{ end }}
-{{ end }}
 {{ if and $bonkcsrf (not $IsPreview) }}
 <p>
 <details class="actions">

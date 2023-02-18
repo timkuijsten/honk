@@ -337,12 +337,6 @@ function relinklinks() {
 			el.onclick = function() {
 				flogit(el, "react", xid);
 			}
-		} else if (el.classList.contains("playit")) {
-			var noise = el.dataset.noise
-			var wonk = el.dataset.wonk
-			el.onclick = function() {
-				playit(el, noise, wonk, xid)
-			}
 		}
 	})
 }
@@ -421,12 +415,6 @@ function fillcheckin() {
 			el.value = err.message
 		}, gpsoptions)
 	}
-}
-function playit(elem, word, wordlist, xid) {
-	import('/wonk.js').then(module => {
-		makeaguess = module.makeaguess
-		module.addguesscontrols(elem, word, wordlist, xid)
-	})
 }
 function addemu(elem) {
 	const data = elem.alt

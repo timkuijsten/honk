@@ -1330,21 +1330,6 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if wherefore == "wonk" {
-		xonk := getxonk(userinfo.UserID, what)
-		if xonk != nil {
-			_, err := stmtUpdateFlags.Exec(flagIsWonked, xonk.ID)
-			if err == nil {
-				guesses := r.FormValue("guesses")
-				_, err = stmtSaveMeta.Exec(xonk.ID, "guesses", guesses)
-			}
-			if err != nil {
-				elog.Printf("error saving: %s", err)
-			}
-		}
-		return
-	}
-
 	// my hammer is too big, oh well
 	defer oldjonks.Flush()
 
@@ -1620,10 +1605,6 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 		if rid != "" {
 			what = "tonk"
 		}
-		wonkles := r.FormValue("wonkles")
-		if wonkles != "" {
-			what = "wonk"
-		}
 		honk = &Honk{
 			UserID:   userinfo.UserID,
 			Username: userinfo.Username,
@@ -1632,7 +1613,6 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 			XID:      xid,
 			Date:     dt,
 			Format:   format,
-			Wonkles:  wonkles,
 		}
 	}
 
@@ -1662,7 +1642,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 		honk.RID = rid
 		if xonk.Precis != "" && honk.Precis == "" {
 			honk.Precis = xonk.Precis
-			if !(strings.HasPrefix(honk.Precis, "DZ:") || strings.HasPrefix(honk.Precis, "re: re: re: ")) {
+			if !re_dangerous.MatchString(honk.Precis) {
 				honk.Precis = "re: " + honk.Precis
 			}
 		}
@@ -2553,7 +2533,6 @@ func serve() {
 
 	getters.HandleFunc("/style.css", serveviewasset)
 	getters.HandleFunc("/honkpage.js", serveviewasset)
-	getters.HandleFunc("/wonk.js", serveviewasset)
 	getters.HandleFunc("/misc.js", serveviewasset)
 	getters.HandleFunc("/local.css", servedataasset)
 	getters.HandleFunc("/local.js", servedataasset)
@@ -2565,8 +2544,6 @@ func serve() {
 	posters.HandleFunc("/dologin", login.LoginFunc)
 	getters.HandleFunc("/logout", login.LogoutFunc)
 	getters.HandleFunc("/help/{name:[\\pL[:digit:]_.-]+}", servehelp)
-
-	getters.HandleFunc("/bloat/wonkles", servewonkles)
 
 	loggedin := mux.NewRoute().Subrouter()
 	loggedin.Use(login.Required)
