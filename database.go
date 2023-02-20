@@ -962,7 +962,7 @@ func savexonker(what, value, flav, when string) {
 	stmtSaveXonker.Exec(what, value, flav, when)
 }
 
-func savehonker(user *WhatAbout, url, name, flavor, combos, mj string) error {
+func savehonker(user *WhatAbout, url, name, flavor, combos, mj string) (int64, error) {
 	var owner string
 	if url[0] == '#' {
 		flavor = "peep"
@@ -974,7 +974,7 @@ func savehonker(user *WhatAbout, url, name, flavor, combos, mj string) error {
 		info, err := investigate(url)
 		if err != nil {
 			ilog.Printf("failed to investigate honker: %s", err)
-			return err
+			return 0, err
 		}
 		url = info.XID
 		if name == "" {
@@ -993,19 +993,19 @@ func savehonker(user *WhatAbout, url, name, flavor, combos, mj string) error {
 		} else {
 			err = fmt.Errorf("it seems you are already subscribed to them")
 		}
-		return err
+		return 0, err
 	}
 
 	res, err := stmtSaveHonker.Exec(user.ID, name, url, flavor, combos, owner, mj)
 	if err != nil {
 		elog.Print(err)
-		return err
+		return 0, err
 	}
 	honkerid, _ := res.LastInsertId()
 	if flavor == "presub" {
 		followyou(user, honkerid)
 	}
-	return nil
+	return honkerid, nil
 }
 
 func cleanupdb(arg string) {

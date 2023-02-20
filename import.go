@@ -210,7 +210,7 @@ func importMastotooters(user *WhatAbout, source string) {
 		name := ""
 		flavor := "peep"
 		combos := ""
-		err := savehonker(user, url, name, flavor, combos, mj)
+		_, err := savehonker(user, url, name, flavor, combos, mj)
 		if err != nil {
 			elog.Printf("trouble with a honker: %s", err)
 		}

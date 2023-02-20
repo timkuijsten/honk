@@ -55,10 +55,11 @@ func hootextractor(r io.Reader, url string, seen map[string]bool) string {
 	var htf htfilter.Filter
 	htf.Imager = func(node *html.Node) string {
 		alt := htfilter.GetAttr(node, "alt")
-		if htfilter.HasClass(node, "Emoji") && alt != "" {
+		src := htfilter.GetAttr(node, "src")
+		if htfilter.HasClass(node, "Emoji") || strings.HasSuffix(src, ".svg") {
 			return alt
 		}
-		return string(templates.Sprintf(" <img src='%s' alt='%s'>", htfilter.GetAttr(node, "src"), alt))
+		return string(templates.Sprintf(" <img src='%s' alt='%s'>", src, alt))
 	}
 
 	var buf strings.Builder
