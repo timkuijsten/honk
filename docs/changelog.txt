@@ -2,6 +2,28 @@ changelog
 
 === next
 
++ New threaded display order.
+
++ Improved search.
+
++ Tuned up superdeliverator.
+
++ Import from instagram.
+
++ improve handling of some Page and Link objects
+
++ search can now load external posts
+
+=== 0.9.91 One More Time
+
++ Swallow a follow bug.
+
+=== 0.9.9 Eat the Bugs
+
++ Some fixes for image descriptions.
+
++ Fix double htmlization of subject lines.
+
 + Remove the wonk support. Fun's over, back to work.
 
 + All inclusive danger zone spoiler alerts.

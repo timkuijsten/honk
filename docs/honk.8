@@ -142,6 +142,11 @@ command.
 Users may be deleted with the
 .Ic deluser Ar username
 command.
+.Pp
+Follow and unfollow requests can be sent via command line with
+.Ic follow Ar username Ar url
+and
+.Ic unfollow Ar username Ar url .
 .Ss Maintenance
 The database may grow large over time.
 The
@@ -149,6 +154,10 @@ The
 command exists to purge old external data, by default 30 days.
 This removes unreferenced, unsaved posts and attachments.
 It does not remove any original content.
+This will not immediately reduce the size of the database, but frees space
+for future use.
+A vacuum may be performed manually if necessary, but will require more time
+and additional disk space.
 .Pp
 Backups may be performed by running
 .Ic backup dirname .
@@ -185,7 +194,7 @@ and templates are reloaded every request.
 Data may be imported and converted from other services using the
 .Ic import
 command.
-Currently supports Mastodon and Twitter exported data.
+Currently supports Mastodon, Twitter, and Instagram exported data.
 Posts are imported and backdated to appear as old honks.
 The Mastodon following list is imported, but must be refollowed.
 .Pp
@@ -196,6 +205,9 @@ To prepare a Twitter data archive, extract the twitter-longhash.zip file.
 After unzipping the data archive, navigate to the tweet_media directory
 and unzip any zip files contained within.
 .Dl ./honk import username twitter source-directory
+.Pp
+To prepare an Instagram data archive, extract the igusername.zip file.
+.Dl ./honk import username instagram source-directory
 .Ss Advanced Options
 Advanced configuration values may be set by running the
 .Ic setconfig Ar key value

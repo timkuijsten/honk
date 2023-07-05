@@ -125,7 +125,7 @@ func adminscreen() {
 	}
 	defer restore()
 	go func() {
-		sig := make(chan os.Signal)
+		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, os.Interrupt)
 		<-sig
 		restore()

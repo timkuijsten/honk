@@ -90,7 +90,7 @@ func initdb() {
 		os.Remove(dbname)
 		os.Exit(1)
 	}()
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
@@ -209,7 +209,7 @@ func adduser() {
 	defer func() {
 		os.Exit(1)
 	}()
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
@@ -263,7 +263,7 @@ func chpass(username string) {
 	defer func() {
 		os.Exit(1)
 	}()
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c

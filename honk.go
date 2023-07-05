@@ -373,6 +373,42 @@ func main() {
 			return
 		}
 		chpass(args[1])
+	case "follow":
+		if len(args) < 3 {
+			fmt.Printf("usage: honk follow username url\n")
+			return
+		}
+		user, err := butwhatabout(args[1])
+		if err != nil {
+			fmt.Printf("user not found\n")
+			return
+		}
+		var meta HonkerMeta
+		mj, _ := jsonify(&meta)
+		honkerid, err := savehonker(user, args[2], "", "presub", "", mj)
+		if err != nil {
+			fmt.Printf("had some trouble with that: %s\n", err)
+			return
+		}
+		followyou(user, honkerid, true)
+	case "unfollow":
+		if len(args) < 3 {
+			fmt.Printf("usage: honk unfollow username url\n")
+			return
+		}
+		user, err := butwhatabout(args[1])
+		if err != nil {
+			fmt.Printf("user not found\n")
+			return
+		}
+		row := db.QueryRow("select honkerid from honkers where xid = ? and userid = ? and flavor in ('sub')", args[2], user.ID)
+		var honkerid int64
+		err = row.Scan(&honkerid)
+		if err != nil {
+			fmt.Printf("sorry couldn't find them\n")
+			return
+		}
+		unfollowyou(user, honkerid, true)
 	case "cleanup":
 		arg := "30"
 		if len(args) > 1 {

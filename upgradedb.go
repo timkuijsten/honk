@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-var myVersion = 41
+var myVersion = 42
 
 type dbexecer interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
@@ -206,6 +206,38 @@ func upgradedb() {
 		doordie(db, "update config set value = 41 where key = 'dbversion'")
 		fallthrough
 	case 41:
+		tx, err := db.Begin()
+		if err != nil {
+			elog.Fatal(err)
+		}
+		rows, err := tx.Query("select honkid, noise from honks where format = 'markdown' and precis <> ''")
+		if err != nil {
+			elog.Fatal(err)
+		}
+		m := make(map[int64]string)
+		var dummy Honk
+		for rows.Next() {
+			err = rows.Scan(&dummy.ID, &dummy.Noise)
+			if err != nil {
+				elog.Fatal(err)
+			}
+			precipitate(&dummy)
+			m[dummy.ID] = dummy.Noise
+		}
+		rows.Close()
+		for id, noise := range m {
+			_, err = tx.Exec("update honks set noise = ? where honkid = ?", noise, id)
+			if err != nil {
+				elog.Fatal(err)
+			}
+		}
+		err = tx.Commit()
+		if err != nil {
+			elog.Fatal(err)
+		}
+		doordie(db, "update config set value = 42 where key = 'dbversion'")
+		fallthrough
+	case 42:
 
 	default:
 		elog.Fatalf("can't upgrade unknown version %d", dbversion)

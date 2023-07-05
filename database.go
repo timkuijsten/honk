@@ -250,7 +250,7 @@ func gethonksforme(userid int64, wanted int64) []*Honk {
 func gethonksfromlongago(userid int64, wanted int64) []*Honk {
 	now := time.Now()
 	var honks []*Honk
-	for i := 1; i <= 3; i++ {
+	for i := 1; i <= 4; i++ {
 		dt := time.Date(now.Year()-i, now.Month(), now.Day(), now.Hour(), now.Minute(),
 			now.Second(), 0, now.Location())
 		dt1 := dt.Add(-36 * time.Hour).UTC().Format(dbtimeformat)
@@ -301,6 +301,26 @@ func gethonksbysearch(userid int64, q string, wanted int64) []*Honk {
 			negate = " not "
 		}
 		if t == "" {
+			continue
+		}
+		if t == "@me" {
+			queries = append(queries, "whofore = 1")
+			continue
+		}
+		if t == "@self" {
+			queries = append(queries, "(whofore = 2 or whofore = 3)")
+			continue
+		}
+		if strings.HasPrefix(t, "before:") {
+			before := t[7:]
+			queries = append(queries, "dt < ?")
+			params = append(params, before)
+			continue
+		}
+		if strings.HasPrefix(t, "after:") {
+			after := t[6:]
+			queries = append(queries, "dt > ?")
+			params = append(params, after)
 			continue
 		}
 		if strings.HasPrefix(t, "site:") {
@@ -548,6 +568,8 @@ func savefileandxid(name string, desc string, url string, media string, local bo
 				xid += ".png"
 			case "image/jpeg":
 				xid += ".jpg"
+			case "image/svg+xml":
+				xid += ".svg"
 			case "application/pdf":
 				xid += ".pdf"
 			case "text/plain":
@@ -572,6 +594,20 @@ func savefileandxid(name string, desc string, url string, media string, local bo
 	}
 	fileid, _ := res.LastInsertId()
 	return fileid, xid, nil
+}
+
+func finddonkid(fileid int64, url string) *Donk {
+	donk := new(Donk)
+	row := stmtFindFileId.QueryRow(fileid, url)
+	err := row.Scan(&donk.XID, &donk.Local, &donk.Desc)
+	if err == nil {
+		donk.FileID = fileid
+		return donk
+	}
+	if err != sql.ErrNoRows {
+		elog.Printf("error finding file: %s", err)
+	}
+	return nil
 }
 
 func finddonk(url string) *Donk {
@@ -1002,9 +1038,6 @@ func savehonker(user *WhatAbout, url, name, flavor, combos, mj string) (int64, e
 		return 0, err
 	}
 	honkerid, _ := res.LastInsertId()
-	if flavor == "presub" {
-		followyou(user, honkerid)
-	}
 	return honkerid, nil
 }
 
@@ -1082,7 +1115,7 @@ var stmtHonksByOntology, stmtHonksForUser, stmtHonksForMe, stmtSaveDub, stmtHonk
 var stmtHonksFromLongAgo *sql.Stmt
 var stmtHonksByHonker, stmtSaveHonk, stmtUserByName, stmtUserByNumber *sql.Stmt
 var stmtEventHonks, stmtOneBonk, stmtFindZonk, stmtFindXonk, stmtSaveDonk *sql.Stmt
-var stmtFindFile, stmtGetFileData, stmtSaveFileData, stmtSaveFile *sql.Stmt
+var stmtFindFile, stmtFindFileId, stmtGetFileData, stmtSaveFileData, stmtSaveFile *sql.Stmt
 var stmtCheckFileData *sql.Stmt
 var stmtAddDoover, stmtGetDoovers, stmtLoadDoover, stmtZapDoover, stmtOneHonker *sql.Stmt
 var stmtUntagged, stmtDeleteHonk, stmtDeleteDonks, stmtDeleteOnts, stmtSaveZonker *sql.Stmt
@@ -1093,6 +1126,7 @@ var stmtSaveMeta, stmtDeleteAllMeta, stmtDeleteOneMeta, stmtDeleteSomeMeta, stmt
 var stmtHonksISaved, stmtGetFilters, stmtSaveFilter, stmtDeleteFilter *sql.Stmt
 var stmtGetTracks *sql.Stmt
 var stmtSaveChonk, stmtLoadChonks, stmtGetChatters *sql.Stmt
+var stmtDeliquentCheck, stmtDeliquentUpdate *sql.Stmt
 
 func preparetodie(db *sql.DB, s string) *sql.Stmt {
 	stmt, err := db.Prepare(s)
@@ -1152,6 +1186,7 @@ func prepareStatements(db *sql.DB) {
 	stmtGetFileData = preparetodie(blobdb, "select media, content from filedata where xid = ?")
 	stmtFindXonk = preparetodie(db, "select honkid from honks where userid = ? and xid = ?")
 	stmtFindFile = preparetodie(db, "select fileid, xid from filemeta where url = ? and local = 1")
+	stmtFindFileId = preparetodie(db, "select xid, local, description from filemeta where fileid = ? and url = ? and local = 1")
 	stmtUserByName = preparetodie(db, "select userid, username, displayname, about, pubkey, seckey, options from users where username = ? and userid > 0")
 	stmtUserByNumber = preparetodie(db, "select userid, username, displayname, about, pubkey, seckey, options from users where userid = ?")
 	stmtSaveDub = preparetodie(db, "insert into honkers (userid, name, xid, flavor, combos, owner, meta, folxid) values (?, ?, ?, ?, '', '', '', ?)")
@@ -1178,4 +1213,6 @@ func prepareStatements(db *sql.DB) {
 	stmtSaveChonk = preparetodie(db, "insert into chonks (userid, xid, who, target, dt, noise, format) values (?, ?, ?, ?, ?, ?, ?)")
 	stmtLoadChonks = preparetodie(db, "select chonkid, userid, xid, who, target, dt, noise, format from chonks where userid = ? and dt > ? order by chonkid asc")
 	stmtGetChatters = preparetodie(db, "select distinct(target) from chonks where userid = ?")
+	stmtDeliquentCheck = preparetodie(db, "select dooverid, msg from doovers where userid = ? and rcpt = ?")
+	stmtDeliquentUpdate = preparetodie(db, "update doovers set msg = ? where dooverid = ?")
 }

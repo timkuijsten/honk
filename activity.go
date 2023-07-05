@@ -25,7 +25,6 @@ import (
 	"io"
 	notrand "math/rand"
 	"net/http"
-	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -166,7 +165,11 @@ func junkGet(userid int64, url string, args junk.GetArgs) (junk.Junk, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	switch resp.StatusCode {
+	case 200:
+	case 201:
+	case 202:
+	default:
 		return nil, fmt.Errorf("http get status: %d", resp.StatusCode)
 	}
 	return junk.Read(resp.Body)
@@ -508,37 +511,12 @@ func firstofmany(obj junk.Junk, key string) string {
 }
 
 var re_mast0link = regexp.MustCompile(`https://[[:alnum:].]+/users/[[:alnum:]]+/statuses/[[:digit:]]+`)
-var re_masto1ink = regexp.MustCompile(`https://[[:alnum:].]+/@[[:alnum:]]+/[[:digit:]]+`)
+var re_masto1ink = regexp.MustCompile(`https://([[:alnum:].]+)/@([[:alnum:]]+)/([[:digit:]]+)`)
 var re_misslink = regexp.MustCompile(`https://[[:alnum:].]+/notes/[[:alnum:]]+`)
 var re_honklink = regexp.MustCompile(`https://[[:alnum:].]+/u/[[:alnum:]]+/h/[[:alnum:]]+`)
-var re_romalink = regexp.MustCompile(`https://[[:alnum:].]+/objects/[[:alnum:]-]+`)
+var re_r0malink = regexp.MustCompile(`https://[[:alnum:].]+/objects/[[:alnum:]-]+`)
+var re_roma1ink = regexp.MustCompile(`https://[[:alnum:].]+/notice/[[:alnum:]]+`)
 var re_qtlinks = regexp.MustCompile(`>https://[^\s<]+<`)
-
-func qutify(user *WhatAbout, content string) string {
-	// well this is gross
-	malcontent := strings.ReplaceAll(content, `</span><span class="ellipsis">`, "")
-	malcontent = strings.ReplaceAll(malcontent, `</span><span class="invisible">`, "")
-	mlinks := re_qtlinks.FindAllString(malcontent, -1)
-	for _, m := range mlinks {
-		m = m[1 : len(m)-1]
-		dlog.Printf("consider qt: %s", m)
-		if re_mast0link.MatchString(m) ||
-			re_masto1ink.MatchString(m) ||
-			re_misslink.MatchString(m) ||
-			re_honklink.MatchString(m) ||
-			re_romalink.MatchString(m) {
-			j, err := GetJunk(user.ID, m)
-			dlog.Printf("fetched %s: %s", m, err)
-			if err == nil {
-				q, ok := j.GetString("content")
-				if ok {
-					content = fmt.Sprintf("%s<blockquote>%s</blockquote>", content, q)
-				}
-			}
-		}
-	}
-	return content
-}
 
 func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 	depth := 0
@@ -546,6 +524,44 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 	currenttid := ""
 	goingup := 0
 	var xonkxonkfn func(item junk.Junk, origin string, isUpdate bool) *Honk
+
+	qutify := func(user *WhatAbout, content string) string {
+		if depth >= maxdepth {
+			ilog.Printf("in too deep")
+			return content
+		}
+		// well this is gross
+		malcontent := strings.ReplaceAll(content, `</span><span class="ellipsis">`, "")
+		malcontent = strings.ReplaceAll(malcontent, `</span><span class="invisible">`, "")
+		mlinks := re_qtlinks.FindAllString(malcontent, -1)
+		for _, m := range mlinks {
+			tryit := false
+			m = m[1 : len(m)-1]
+			if re_mast0link.MatchString(m) || re_misslink.MatchString(m) ||
+				re_honklink.MatchString(m) || re_r0malink.MatchString(m) ||
+				re_roma1ink.MatchString(m) {
+				tryit = true
+			} else if re_masto1ink.MatchString(m) {
+				m = re_masto1ink.ReplaceAllString(m, "https://$1/users/$2/statuses/$3")
+				tryit = true
+			}
+			if tryit {
+				if x := getxonk(user.ID, m); x != nil {
+					content = fmt.Sprintf("%s<blockquote>%s</blockquote>", content, x.Noise)
+				} else if j, err := GetJunk(user.ID, m); err == nil {
+					q, ok := j.GetString("content")
+					if ok {
+						content = fmt.Sprintf("%s<blockquote>%s</blockquote>", content, q)
+					}
+					prevdepth := depth
+					depth = maxdepth
+					xonkxonkfn(j, originate(m), false)
+					depth = prevdepth
+				}
+			}
+		}
+		return content
+	}
 
 	saveonemore := func(xid string) {
 		dlog.Printf("getting onemore: %s", xid)
@@ -576,6 +592,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		var replies []string
 		var obj junk.Junk
 		waspage := false
+		preferorig := false
 		switch what {
 		case "Delete":
 			obj, ok = item.GetMap("object")
@@ -614,6 +631,14 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		case "Announce":
 			obj, ok = item.GetMap("object")
 			if ok {
+				what, ok := obj.GetString("type")
+				if ok && what == "Create" {
+					obj, ok = obj.GetMap("object")
+					if !ok {
+						ilog.Printf("lost object inside create %s", id)
+						return nil
+					}
+				}
 				xid, _ = obj.GetString("id")
 			} else {
 				xid, _ = item.GetString("object")
@@ -621,12 +646,16 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			if !needbonkid(user, xid) {
 				return nil
 			}
-			dlog.Printf("getting bonk: %s", xid)
-			obj, err = GetJunkHardMode(user.ID, xid)
-			if err != nil {
-				ilog.Printf("error getting bonk: %s: %s", xid, err)
-			}
 			origin = originate(xid)
+			if ok && originate(id) == origin {
+				dlog.Printf("using object in announce for %s", xid)
+			} else {
+				dlog.Printf("getting bonk: %s", xid)
+				obj, err = GetJunkHardMode(user.ID, xid)
+				if err != nil {
+					ilog.Printf("error getting bonk: %s: %s", xid, err)
+				}
+			}
 			what = "bonk"
 		case "Update":
 			isUpdate = true
@@ -690,6 +719,9 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		case "Audio":
 			fallthrough
 		case "Image":
+			if what == "Image" {
+				preferorig = true
+			}
 			fallthrough
 		case "Video":
 			fallthrough
@@ -837,7 +869,13 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			procatt := func(att junk.Junk) {
 				at, _ := att.GetString("type")
 				mt, _ := att.GetString("mediaType")
+				if mt == "" {
+					mt = "image"
+				}
 				u, ok := att.GetString("url")
+				if !ok {
+					u, ok = att.GetString("href")
+				}
 				if !ok {
 					if ua, ok := att.GetArray("url"); ok && len(ua) > 0 {
 						u, ok = ua[0].(string)
@@ -863,14 +901,24 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 					desc = name
 				}
 				localize := false
-				if numatts > 4 {
-					ilog.Printf("excessive attachment: %s", at)
-				} else if at == "Document" || at == "Image" {
+				if at == "Document" || at == "Image" {
 					mt = strings.ToLower(mt)
 					dlog.Printf("attachment: %s %s", mt, u)
 					if mt == "text/plain" || mt == "application/pdf" ||
 						strings.HasPrefix(mt, "image") {
-						localize = true
+						if numatts > 4 {
+							ilog.Printf("excessive attachment: %s", at)
+						} else {
+							localize = true
+						}
+					}
+				} else if at == "Link" {
+					if waspage {
+						xonk.Noise += fmt.Sprintf(`<p><a href="%s">%s</a>`, u, u)
+						return
+					}
+					if name == "" {
+						name = u
 					}
 				} else {
 					ilog.Printf("unknown attachment: %s", at)
@@ -878,23 +926,45 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 				if skipMedia(&xonk) {
 					localize = false
 				}
+				if preferorig && !localize {
+					return
+				}
 				donk := savedonk(u, name, desc, mt, localize)
 				if donk != nil {
 					xonk.Donks = append(xonk.Donks, donk)
 				}
 				numatts++
 			}
-			atts, _ := obj.GetArray("attachment")
-			for _, atti := range atts {
-				att, ok := atti.(junk.Junk)
-				if !ok {
-					ilog.Printf("attachment that wasn't map?")
-					continue
-				}
-				procatt(att)
+			if img, ok := obj.GetMap("image"); ok {
+				procatt(img)
 			}
-			if att, ok := obj.GetMap("attachment"); ok {
-				procatt(att)
+			if preferorig {
+				atts, _ := obj.GetArray("url")
+				for _, atti := range atts {
+					att, ok := atti.(junk.Junk)
+					if !ok {
+						ilog.Printf("attachment that wasn't map?")
+						continue
+					}
+					procatt(att)
+				}
+				if numatts == 0 {
+					preferorig = false
+				}
+			}
+			if !preferorig {
+				atts, _ := obj.GetArray("attachment")
+				for _, atti := range atts {
+					att, ok := atti.(junk.Junk)
+					if !ok {
+						ilog.Printf("attachment that wasn't map?")
+						continue
+					}
+					procatt(att)
+				}
+				if att, ok := obj.GetMap("attachment"); ok {
+					procatt(att)
+				}
 			}
 			tags, _ := obj.GetArray("tag")
 			for _, tagi := range tags {
@@ -1097,7 +1167,7 @@ func rubadubdub(user *WhatAbout, req junk.Junk) {
 	j["published"] = time.Now().UTC().Format(time.RFC3339)
 	j["object"] = req
 
-	deliverate(0, user.ID, actor, j.ToBytes(), true)
+	deliverate(user.ID, actor, j.ToBytes())
 }
 
 func itakeitallback(user *WhatAbout, xid string, owner string, folxid string) {
@@ -1116,7 +1186,7 @@ func itakeitallback(user *WhatAbout, xid string, owner string, folxid string) {
 	j["object"] = f
 	j["published"] = time.Now().UTC().Format(time.RFC3339)
 
-	deliverate(0, user.ID, owner, j.ToBytes(), true)
+	deliverate(user.ID, owner, j.ToBytes())
 }
 
 func subsub(user *WhatAbout, xid string, owner string, folxid string) {
@@ -1133,7 +1203,7 @@ func subsub(user *WhatAbout, xid string, owner string, folxid string) {
 	j["object"] = xid
 	j["published"] = time.Now().UTC().Format(time.RFC3339)
 
-	deliverate(0, user.ID, owner, j.ToBytes(), true)
+	deliverate(user.ID, owner, j.ToBytes())
 }
 
 func activatedonks(donks []*Donk) []junk.Junk {
@@ -1290,7 +1360,7 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 		if len(atts) > 0 {
 			jo["attachment"] = atts
 		}
-		jo["summary"] = html.EscapeString(h.Precis)
+		jo["summary"] = h.Precis
 		jo["content"] = h.Noise
 		j["object"] = jo
 	case "bonk":
@@ -1443,7 +1513,7 @@ func sendchonk(user *WhatAbout, ch *Chonk) {
 	rcpts := make(map[string]bool)
 	rcpts[ch.Target] = true
 	for a := range rcpts {
-		go deliverate(0, user.ID, a, msg, true)
+		go deliverate(user.ID, a, msg)
 	}
 }
 
@@ -1482,23 +1552,11 @@ func honkworldwide(user *WhatAbout, honk *Honk) {
 		}
 	}
 	for a := range rcpts {
-		go deliverate(0, user.ID, a, msg, doesitmatter(honk.What))
+		go deliverate(user.ID, a, msg)
 	}
 	if honk.Public && len(honk.Onts) > 0 {
 		collectiveaction(honk)
 	}
-}
-
-func doesitmatter(what string) bool {
-	switch what {
-	case "ack":
-		return false
-	case "react":
-		return false
-	case "deack":
-		return false
-	}
-	return true
 }
 
 func collectiveaction(honk *Honk) {
@@ -1527,7 +1585,7 @@ func collectiveaction(honk *Honk) {
 		}
 		msg := j.ToBytes()
 		for a := range rcpts {
-			go deliverate(0, user.ID, a, msg, false)
+			go deliverate(user.ID, a, msg)
 		}
 	}
 }
@@ -1562,12 +1620,7 @@ func junkuser(user *WhatAbout) junk.Junk {
 		a := junk.New()
 		a["type"] = "Image"
 		a["mediaType"] = "image/png"
-		if ava := user.Options.Avatar; ava != "" {
-			a["url"] = ava
-		} else {
-			u := fmt.Sprintf("https://%s/a?a=%s", serverName, url.QueryEscape(user.URL))
-			a["url"] = u
-		}
+		a["url"] = avatarURL(user)
 		j["icon"] = a
 		if ban := user.Options.Banner; ban != "" {
 			a := junk.New()
@@ -1593,10 +1646,8 @@ var oldjonkers = cache.New(cache.Options{Filler: func(name string) ([]byte, bool
 	if err != nil {
 		return nil, false
 	}
-	var buf bytes.Buffer
 	j := junkuser(user)
-	j.Write(&buf)
-	return buf.Bytes(), true
+	return j.ToBytes(), true
 }, Duration: 1 * time.Minute})
 
 func asjonker(name string) ([]byte, bool) {
@@ -1674,8 +1725,11 @@ func investigate(name string) (*SomeThing, error) {
 func somethingabout(obj junk.Junk) (*SomeThing, error) {
 	info := new(SomeThing)
 	t, _ := obj.GetString("type")
+	isowned := false
 	switch t {
 	case "Person":
+		fallthrough
+	case "Group":
 		fallthrough
 	case "Organization":
 		fallthrough
@@ -1684,6 +1738,7 @@ func somethingabout(obj junk.Junk) (*SomeThing, error) {
 	case "Service":
 		info.What = SomeActor
 	case "OrderedCollection":
+		isowned = true
 		fallthrough
 	case "Collection":
 		info.What = SomeCollection
@@ -1695,7 +1750,9 @@ func somethingabout(obj junk.Junk) (*SomeThing, error) {
 	if info.Name == "" {
 		info.Name, _ = obj.GetString("name")
 	}
-	info.Owner, _ = obj.GetString("attributedTo")
+	if isowned {
+		info.Owner, _ = obj.GetString("attributedTo")
+	}
 	if info.Owner == "" {
 		info.Owner = info.XID
 	}
@@ -1835,7 +1892,7 @@ func updateMe(username string) {
 		}
 	}
 	for a := range rcpts {
-		go deliverate(0, user.ID, a, msg, false)
+		go deliverate(user.ID, a, msg)
 	}
 }
 
@@ -1884,7 +1941,7 @@ func unfollowme(user *WhatAbout, who string, name string, j junk.Junk) {
 	}
 }
 
-func followyou(user *WhatAbout, honkerid int64) {
+func followyou(user *WhatAbout, honkerid int64, sync bool) {
 	var url, owner string
 	db := opendatabase()
 	row := db.QueryRow("select xid, owner from honkers where honkerid = ? and userid = ? and flavor in ('unsub', 'peep', 'presub', 'sub')",
@@ -1901,17 +1958,24 @@ func followyou(user *WhatAbout, honkerid int64) {
 		elog.Printf("error updating honker: %s", err)
 		return
 	}
-	go subsub(user, url, owner, folxid)
+	if sync {
+		subsub(user, url, owner, folxid)
+	} else {
+		go subsub(user, url, owner, folxid)
+	}
 
 }
-func unfollowyou(user *WhatAbout, honkerid int64) {
+func unfollowyou(user *WhatAbout, honkerid int64, sync bool) {
 	db := opendatabase()
-	row := db.QueryRow("select xid, owner, folxid from honkers where honkerid = ? and userid = ? and flavor in ('sub')",
+	row := db.QueryRow("select xid, owner, folxid, flavor from honkers where honkerid = ? and userid = ? and flavor in ('unsub', 'peep', 'presub', 'sub')",
 		honkerid, user.ID)
-	var url, owner, folxid string
-	err := row.Scan(&url, &owner, &folxid)
+	var url, owner, folxid, flavor string
+	err := row.Scan(&url, &owner, &folxid, &flavor)
 	if err != nil {
 		elog.Printf("can't get honker xid: %s", err)
+		return
+	}
+	if flavor == "peep" {
 		return
 	}
 	ilog.Printf("unsubscribing from %s", url)
@@ -1920,7 +1984,11 @@ func unfollowyou(user *WhatAbout, honkerid int64) {
 		elog.Printf("error updating honker: %s", err)
 		return
 	}
-	go itakeitallback(user, url, owner, folxid)
+	if sync {
+		itakeitallback(user, url, owner, folxid)
+	} else {
+		go itakeitallback(user, url, owner, folxid)
+	}
 }
 
 func followyou2(user *WhatAbout, j junk.Junk) {

@@ -17,10 +17,16 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"net"
+	"net/http"
 	"net/rpc"
 	"os"
 	"os/exec"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
 
 	"humungus.tedunangst.com/r/webs/gate"
 	"humungus.tedunangst.com/r/webs/image"
@@ -55,7 +61,32 @@ func backendSockname() string {
 	return dataDir + "/backend.sock"
 }
 
+func isSVG(data []byte) bool {
+	ct := http.DetectContentType(data)
+	if strings.HasPrefix(ct, "text/xml") {
+		return strings.Index(string(data), "<!DOCTYPE svg PUBLIC") != -1
+	}
+	if strings.HasPrefix(ct, "text/plain") {
+		return bytes.HasPrefix(data, []byte("<svg "))
+	}
+	return ct == "image/svg+xml"
+}
+
+func imageFromSVG(data []byte) (*image.Image, error) {
+	if len(data) > 100000 {
+		return nil, errors.New("my svg is too big")
+	}
+	svg := &image.Image{
+		Data:   data,
+		Format: "svg+xml",
+	}
+	return svg, nil
+}
+
 func shrinkit(data []byte) (*image.Image, error) {
+	if isSVG(data) {
+		return imageFromSVG(data)
+	}
 	cl, err := rpc.Dial("unix", backendSockname())
 	if err != nil {
 		return nil, err
@@ -84,6 +115,7 @@ func orphancheck() {
 func backendServer() {
 	dlog.Printf("backend server running")
 	go orphancheck()
+	signal.Ignore(syscall.SIGINT)
 	shrinker := new(Shrinker)
 	srv := rpc.NewServer()
 	err := srv.Register(shrinker)
@@ -124,9 +156,23 @@ func runBackendServer() {
 	if err != nil {
 		elog.Panicf("can't exec backend: %s", err)
 	}
+	workinprogress++
+	var mtx sync.Mutex
+	go func() {
+		<-endoftheworld
+		mtx.Lock()
+		defer mtx.Unlock()
+		w.Close()
+		w = nil
+		readyalready <- true
+	}()
 	go func() {
 		proc.Wait()
-		elog.Printf("lost the backend: %s", err)
-		w.Close()
+		mtx.Lock()
+		defer mtx.Unlock()
+		if w != nil {
+			elog.Printf("lost the backend: %s", err)
+			w.Close()
+		}
 	}()
 }

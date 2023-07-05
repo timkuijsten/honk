@@ -211,7 +211,8 @@ func replaceimgsand(zap map[string]bool, absolute bool) func(node *html.Node) st
 func translatechonk(ch *Chonk) {
 	noise := ch.Noise
 	if ch.Format == "markdown" {
-		noise = markitzero(noise)
+		var marker mz.Marker
+		noise = marker.Mark(noise)
 	}
 	var htf htfilter.Filter
 	htf.SpanClasses = allowedclasses
@@ -289,10 +290,7 @@ func imaginate(honk *Honk) {
 
 var re_dangerous = regexp.MustCompile("^[a-zA-Z]{2}:")
 
-func translate(honk *Honk) {
-	if honk.Format == "html" {
-		return
-	}
+func precipitate(honk *Honk) {
 	noise := honk.Noise
 	if re_dangerous.MatchString(noise) {
 		idx := strings.Index(noise, "\n")
@@ -303,8 +301,17 @@ func translate(honk *Honk) {
 			honk.Precis = noise[:idx]
 			noise = noise[idx+1:]
 		}
+		var marker mz.Marker
+		honk.Precis = marker.Mark(strings.TrimSpace(honk.Precis))
+		honk.Noise = noise
 	}
-	honk.Precis = markitzero(strings.TrimSpace(honk.Precis))
+}
+
+func translate(honk *Honk) {
+	if honk.Format == "html" {
+		return
+	}
+	noise := honk.Noise
 
 	var marker mz.Marker
 	marker.HashLinker = ontoreplacer
@@ -420,6 +427,8 @@ func herdofemus(noise string) []Emu {
 var re_memes = regexp.MustCompile("meme: ?([^\n]+)")
 var re_avatar = regexp.MustCompile("avatar: ?([^\n]+)")
 var re_banner = regexp.MustCompile("banner: ?([^\n]+)")
+var re_convoy = regexp.MustCompile("convoy: ?([^\n]+)")
+var re_convalidate = regexp.MustCompile("^(https?|tag|data):")
 
 func memetize(honk *Honk) {
 	repl := func(x string) string {
@@ -456,7 +465,7 @@ func memetize(honk *Honk) {
 	honk.Noise = re_memes.ReplaceAllStringFunc(honk.Noise, repl)
 }
 
-var re_quickmention = regexp.MustCompile("(^|[ \n])@[[:alnum:]]+([ \n.,']|$)")
+var re_quickmention = regexp.MustCompile("(^|[ \n])@[[:alnum:]_]+([ \n:;.,']|$)")
 
 func quickrename(s string, userid int64) string {
 	nonstop := true
@@ -472,6 +481,7 @@ func quickrename(s string, userid int64) string {
 			m = m[1:]
 			tail := ""
 			if last := m[len(m)-1]; last == ' ' || last == '\n' ||
+				last == ':' || last == ';' ||
 				last == '.' || last == ',' || last == '\'' {
 				tail = m[len(m)-1:]
 				m = m[:len(m)-1]
@@ -539,7 +549,7 @@ func attoreplacer(m string) string {
 }
 
 func ontoreplacer(h string) string {
-	return fmt.Sprintf(`<a href="https://%s/o/%s">%s</a>`, serverName,
+	return fmt.Sprintf(`<a class="mention hashtag" href="https://%s/o/%s">%s</a>`, serverName,
 		strings.ToLower(h[1:]), h)
 }
 

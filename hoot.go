@@ -67,41 +67,6 @@ func hootextractor(r io.Reader, url string, seen map[string]bool) string {
 
 	divs := tweetsel.MatchAll(root)
 	for i, div := range divs {
-		{
-			twp := div.Parent.Parent.Parent.Parent.Parent
-			link := url
-			alink := linksel.MatchFirst(twp)
-			if alink == nil {
-				if i != 0 {
-					dlog.Printf("missing link")
-					continue
-				}
-			} else {
-				alink = alink.Parent
-				link = "https://twitter.com" + htfilter.GetAttr(alink, "href")
-			}
-			authormatch := authorregex.FindStringSubmatch(link)
-			if len(authormatch) < 2 {
-				dlog.Printf("no author?: %s", link)
-				continue
-			}
-			author := authormatch[1]
-			if wanted == "" {
-				wanted = author
-			}
-			if author != wanted {
-				continue
-			}
-			for _, img := range imgsel.MatchAll(twp) {
-				img.Parent.RemoveChild(img)
-				div.AppendChild(img)
-			}
-			text := htf.NodeText(div)
-			text = strings.Replace(text, "\n", " ", -1)
-			fmt.Fprintf(&buf, "> @%s: %s\n", author, text)
-			continue
-		}
-
 		twp := div.Parent.Parent.Parent.Parent.Parent
 		link := url
 		alink := linksel.MatchFirst(twp)
@@ -111,11 +76,8 @@ func hootextractor(r io.Reader, url string, seen map[string]bool) string {
 				continue
 			}
 		} else {
+			alink = alink.Parent
 			link = "https://twitter.com" + htfilter.GetAttr(alink, "href")
-		}
-		replto := replyingto.MatchFirst(twp)
-		if replto != nil {
-			continue
 		}
 		authormatch := authorregex.FindStringSubmatch(link)
 		if len(authormatch) < 2 {
@@ -135,14 +97,7 @@ func hootextractor(r io.Reader, url string, seen map[string]bool) string {
 		}
 		text := htf.NodeText(div)
 		text = strings.Replace(text, "\n", " ", -1)
-		text = re_removepics.ReplaceAllString(text, "")
-
-		if seen[text] {
-			continue
-		}
-
 		fmt.Fprintf(&buf, "> @%s: %s\n", author, text)
-		seen[text] = true
 	}
 	return buf.String()
 }

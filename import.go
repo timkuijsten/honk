@@ -35,6 +35,8 @@ func importMain(username, flavor, source string) {
 		importMastodon(username, source)
 	case "twitter":
 		importTwitter(username, source)
+	case "instagram":
+		importInstagram(username, source)
 	default:
 		elog.Fatal("unknown source flavor")
 	}
@@ -439,6 +441,82 @@ func importTwitter(username, source string) {
 		}
 		for _, ht := range t.Tweet.Entities.Hashtags {
 			honk.Onts = append(honk.Onts, "#"+ht.Text)
+		}
+		honk.Noise = noise
+		err := savehonk(&honk)
+		log.Printf("honk saved %v -> %v", xid, err)
+	}
+}
+
+func importInstagram(username, source string) {
+	user, err := butwhatabout(username)
+	if err != nil {
+		elog.Fatal(err)
+	}
+
+	type Gram struct {
+		Media []struct {
+			URI      string
+			Creation int64 `json:"creation_timestamp"`
+			Title    string
+		}
+	}
+
+	var grams []*Gram
+	fd, err := os.Open(source + "/content/posts_1.json")
+	if err != nil {
+		elog.Fatal(err)
+	}
+	dec := json.NewDecoder(fd)
+	err = dec.Decode(&grams)
+	if err != nil {
+		elog.Fatalf("error parsing json: %s", err)
+	}
+	fd.Close()
+	log.Printf("importing %d grams", len(grams))
+	sort.Slice(grams, func(i, j int) bool {
+		return grams[i].Media[0].Creation < grams[j].Media[0].Creation
+	})
+	for _, g0 := range grams {
+		g := g0.Media[0]
+		xid := fmt.Sprintf("%s/%s/%s", user.URL, honkSep, xfiltrate())
+		what := "honk"
+		noise := g.Title
+		convoy := "data:,acoustichonkytonk-" + xfiltrate()
+		date := time.Unix(g.Creation, 0)
+		audience := []string{thewholeworld}
+		honk := Honk{
+			UserID:   user.ID,
+			Username: user.Name,
+			What:     what,
+			Honker:   user.URL,
+			XID:      xid,
+			Date:     date,
+			Format:   "markdown",
+			Audience: audience,
+			Convoy:   convoy,
+			Public:   true,
+			Whofore:  2,
+		}
+		{
+			u := xfiltrate()
+			fname := fmt.Sprintf("%s/%s", source, g.URI)
+			data, err := ioutil.ReadFile(fname)
+			if err != nil {
+				elog.Printf("error reading media: %s", fname)
+				continue
+			}
+			newurl := fmt.Sprintf("https://%s/d/%s", serverName, u)
+
+			fileid, err := savefile(u, u, newurl, "image/jpg", true, data)
+			if err != nil {
+				elog.Printf("error saving media: %s", fname)
+				continue
+			}
+			donk := &Donk{
+				FileID: fileid,
+			}
+			honk.Donks = append(honk.Donks, donk)
 		}
 		honk.Noise = noise
 		err := savehonk(&honk)

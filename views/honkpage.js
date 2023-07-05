@@ -139,7 +139,6 @@ function fillinhonks(xhr, glowit) {
 		} else {
 			holder.append(h)
 		}
-			
 	}
 	relinklinks()
 	return lenhonks
@@ -212,7 +211,7 @@ function switchtopage(name, arg) {
 	curpagestate.name = name
 	curpagestate.arg = arg
 	// get the holder for the target page
-	var stash = name + ":" + arg
+	stash = name + ":" + arg
 	holder = honksforpage[stash]
 	if (holder) {
 		honksonpage.prepend(holder)
@@ -226,7 +225,7 @@ function switchtopage(name, arg) {
 		var args = hydrargs()
 		get("/hydra?" + encode(args), function(xhr) {
 			if (xhr.status == 200) {
-				var lenhonks = fillinhonks(xhr, false)
+				fillinhonks(xhr, false)
 			} else {
 				refreshupdate(" status: " + xhr.status)
 			}
@@ -352,6 +351,7 @@ function showhonkform(elem, rid, hname) {
 		elem.insertAdjacentElement('afterend', form)
 	}
 	var ridinput = document.getElementById("ridinput")
+	var honknoise = document.getElementById("honknoise")
 	if (rid) {
 		ridinput.value = rid
 		if (hname) {
@@ -365,7 +365,7 @@ function showhonkform(elem, rid, hname) {
 	}
 	var updateinput = document.getElementById("updatexidinput")
 	updateinput.value = ""
-	document.getElementById("honknoise").focus()
+	honknoise.focus()
 	return false
 }
 function cancelhonking() {
@@ -387,9 +387,9 @@ function hideelement(el) {
 function updatedonker() {
 	var el = document.getElementById("donker")
 	el.children[1].textContent = el.children[0].value.slice(-20)
-	var el = document.getElementById("donkdescriptor")
+	el = document.getElementById("donkdescriptor")
 	el.style.display = ""
-	var el = document.getElementById("saveddonkxid")
+	el = document.getElementById("saveddonkxid")
 	el.value = ""
 }
 var checkinprec = 100.0
@@ -411,7 +411,7 @@ function fillcheckin() {
 			gpsoptions.timeout = 2000
 		}, function(err) {
 			showelement("placedescriptor")
-			el = document.getElementById("placenameinput")
+			var el = document.getElementById("placenameinput")
 			el.value = err.message
 		}, gpsoptions)
 	}
@@ -422,8 +422,8 @@ function addemu(elem) {
 	box.value += data;
 }
 function loademus() {
-	div = document.getElementById("emupicker")
-	request = new XMLHttpRequest()
+	var div = document.getElementById("emupicker")
+	var request = new XMLHttpRequest()
 	request.open('GET', '/emus')
 	request.onload = function() {
 		div.innerHTML = request.responseText

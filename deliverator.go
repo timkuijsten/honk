@@ -16,39 +16,42 @@
 package main
 
 import (
-	"fmt"
+	"bytes"
+	"database/sql"
 	notrand "math/rand"
+	"strings"
+	"sync"
 	"time"
 
 	"humungus.tedunangst.com/r/webs/gate"
 )
 
 type Doover struct {
-	ID   int64
-	When time.Time
+	ID     int64
+	When   time.Time
+	Userid int64
+	Tries  int64
+	Rcpt   string
+	Msgs   [][]byte
 }
 
-func sayitagain(goarounds int64, userid int64, rcpt string, msg []byte) {
+func sayitagain(doover Doover) {
+	doover.Tries += 1
 	var drift time.Duration
-	switch goarounds {
-	case 1:
-		drift = 5 * time.Minute
-	case 2:
-		drift = 1 * time.Hour
-	case 3:
-		drift = 4 * time.Hour
-	case 4:
-		drift = 12 * time.Hour
-	case 5:
-		drift = 24 * time.Hour
-	default:
-		ilog.Printf("he's dead jim: %s", rcpt)
-		clearoutbound(rcpt)
+	if doover.Tries <= 3 { // 5, 10, 15 minutes
+		drift = time.Duration(doover.Tries*5) * time.Minute
+	} else if doover.Tries <= 6 { // 1, 2, 3 hours
+		drift = time.Duration(doover.Tries-3) * time.Hour
+	} else if doover.Tries <= 9 { // 12, 12, 12 hours
+		drift = time.Duration(12) * time.Hour
+	} else {
+		ilog.Printf("he's dead jim: %s", doover.Rcpt)
 		return
 	}
 	drift += time.Duration(notrand.Int63n(int64(drift / 10)))
 	when := time.Now().Add(drift)
-	_, err := stmtAddDoover.Exec(when.UTC().Format(dbtimeformat), goarounds, userid, rcpt, msg)
+	data := bytes.Join(doover.Msgs, []byte{0})
+	_, err := stmtAddDoover.Exec(when.UTC().Format(dbtimeformat), doover.Tries, doover.Userid, doover.Rcpt, data)
 	if err != nil {
 		elog.Printf("error saving doover: %s", err)
 	}
@@ -58,30 +61,66 @@ func sayitagain(goarounds int64, userid int64, rcpt string, msg []byte) {
 	}
 }
 
-func clearoutbound(rcpt string) {
-	hostname := originate(rcpt)
-	if hostname == "" {
+func lethaldose(err error) int64 {
+	str := err.Error()
+	if strings.Contains(str, "no such host") {
+		return 8
+	}
+	return 0
+}
+
+var dqmtx sync.Mutex
+
+func delinquent(userid int64, rcpt string, msg []byte) bool {
+	dqmtx.Lock()
+	defer dqmtx.Unlock()
+	row := stmtDeliquentCheck.QueryRow(userid, rcpt)
+	var dooverid int64
+	var data []byte
+	err := row.Scan(&dooverid, &data)
+	if err == sql.ErrNoRows {
+		return false
+	}
+	if err != nil {
+		elog.Printf("error scanning deliquent check: %s", err)
+		return true
+	}
+	data = append(data, 0)
+	data = append(data, msg...)
+	_, err = stmtDeliquentUpdate.Exec(data, dooverid)
+	if err != nil {
+		elog.Printf("error updating deliquent: %s", err)
+		return true
+	}
+	return true
+}
+
+func deliverate(userid int64, rcpt string, msg []byte) {
+	if delinquent(userid, rcpt, msg) {
 		return
 	}
-	xid := fmt.Sprintf("%%https://%s/%%", hostname)
-	ilog.Printf("clearing outbound for %s", xid)
-	db := opendatabase()
-	db.Exec("delete from doovers where rcpt like ?", xid)
+	var d Doover
+	d.Userid = userid
+	d.Tries = 0
+	d.Rcpt = rcpt
+	d.Msgs = append(d.Msgs, msg)
+	deliveration(d)
 }
 
 var garage = gate.NewLimiter(40)
 
-func deliverate(goarounds int64, userid int64, rcpt string, msg []byte, prio bool) {
+func deliveration(doover Doover) {
 	garage.Start()
 	defer garage.Finish()
 
 	var ki *KeyInfo
-	ok := ziggies.Get(userid, &ki)
+	ok := ziggies.Get(doover.Userid, &ki)
 	if !ok {
 		elog.Printf("lost key for delivery")
 		return
 	}
 	var inbox string
+	rcpt := doover.Rcpt
 	// already did the box indirection
 	if rcpt[0] == '%' {
 		inbox = rcpt[1:]
@@ -90,18 +129,25 @@ func deliverate(goarounds int64, userid int64, rcpt string, msg []byte, prio boo
 		ok := boxofboxes.Get(rcpt, &box)
 		if !ok {
 			ilog.Printf("failed getting inbox for %s", rcpt)
-			sayitagain(goarounds+1, userid, rcpt, msg)
+			sayitagain(doover)
 			return
 		}
 		inbox = box.In
 	}
-	err := PostMsg(ki.keyname, ki.seckey, inbox, msg)
-	if err != nil {
-		ilog.Printf("failed to post json to %s: %s", inbox, err)
-		if prio {
-			sayitagain(goarounds+1, userid, rcpt, msg)
+	for i, msg := range doover.Msgs {
+		if i > 0 {
+			time.Sleep(2 * time.Second)
 		}
-		return
+		err := PostMsg(ki.keyname, ki.seckey, inbox, msg)
+		if err != nil {
+			ilog.Printf("failed to post json to %s: %s", inbox, err)
+			if t := lethaldose(err); t > doover.Tries {
+				doover.Tries = t
+			}
+			doover.Msgs = doover.Msgs[i:]
+			sayitagain(doover)
+			return
+		}
 	}
 }
 
@@ -130,6 +176,23 @@ func getdoovers() []Doover {
 	return doovers
 }
 
+func extractdoover(d *Doover) error {
+	dqmtx.Lock()
+	defer dqmtx.Unlock()
+	row := stmtLoadDoover.QueryRow(d.ID)
+	var data []byte
+	err := row.Scan(&d.Tries, &d.Userid, &d.Rcpt, &data)
+	if err != nil {
+		return err
+	}
+	_, err = stmtZapDoover.Exec(d.ID)
+	if err != nil {
+		return err
+	}
+	d.Msgs = bytes.Split(data, []byte{0})
+	return nil
+}
+
 func redeliverator() {
 	sleeper := time.NewTimer(5 * time.Second)
 	for {
@@ -148,22 +211,13 @@ func redeliverator() {
 		nexttime := now.Add(24 * time.Hour)
 		for _, d := range doovers {
 			if d.When.Before(now) {
-				var goarounds, userid int64
-				var rcpt string
-				var msg []byte
-				row := stmtLoadDoover.QueryRow(d.ID)
-				err := row.Scan(&goarounds, &userid, &rcpt, &msg)
+				err := extractdoover(&d)
 				if err != nil {
-					elog.Printf("error scanning doover: %s", err)
+					elog.Printf("error extracting doover: %s", err)
 					continue
 				}
-				_, err = stmtZapDoover.Exec(d.ID)
-				if err != nil {
-					elog.Printf("error deleting doover: %s", err)
-					continue
-				}
-				ilog.Printf("redeliverating %s try %d", rcpt, goarounds)
-				deliverate(goarounds, userid, rcpt, msg, true)
+				ilog.Printf("redeliverating %s try %d", d.Rcpt, d.Tries)
+				deliveration(d)
 			} else if d.When.Before(nexttime) {
 				nexttime = d.When
 			}

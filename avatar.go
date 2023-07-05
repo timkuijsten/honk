@@ -23,6 +23,7 @@ import (
 	"image"
 	"image/png"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -101,6 +102,13 @@ func genAvatar(name string) []byte {
 	var buf bytes.Buffer
 	png.Encode(&buf, img)
 	return buf.Bytes()
+}
+
+func avatarURL(user *WhatAbout) string {
+	if ava := user.Options.Avatar; ava != "" {
+		return ava
+	}
+	return fmt.Sprintf("https://%s/a?a=%s", serverName, url.QueryEscape(user.URL))
 }
 
 func showflag(writer http.ResponseWriter, req *http.Request) {
