@@ -41,7 +41,7 @@ proxy_set_header Host $http_host;
 .Ss Build
 Building
 .Nm
-requires a go compiler 1.16 and libsqlite.
+requires a go compiler 1.18 and libsqlite.
 On
 .Ox
 this is the go and sqlite3 packages.
@@ -194,9 +194,12 @@ and templates are reloaded every request.
 Data may be imported and converted from other services using the
 .Ic import
 command.
-Currently supports Mastodon, Twitter, and Instagram exported data.
+Currently supports Honk, Mastodon, Twitter, and Instagram exported data.
 Posts are imported and backdated to appear as old honks.
 The Mastodon following list is imported, but must be refollowed.
+.Pp
+To prepare a Honk data archive, extract the export.zip file.
+.Dl ./honk import username honk source-directory
 .Pp
 To prepare a Mastodon data archive, extract the archive-longhash.tar.gz file.
 .Dl ./honk import username mastodon source-directory
@@ -208,6 +211,13 @@ and unzip any zip files contained within.
 .Pp
 To prepare an Instagram data archive, extract the igusername.zip file.
 .Dl ./honk import username instagram source-directory
+.Ss Export
+User data may be exported to a zip archive using the
+.Ic export
+command.
+This will export the user's outbox and inbox in ActvityPub json format,
+along with associated media.
+.Dl ./honk export username zipname
 .Ss Advanced Options
 Advanced configuration values may be set by running the
 .Ic setconfig Ar key value

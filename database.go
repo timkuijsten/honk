@@ -245,7 +245,7 @@ func gethonksforuserfirstclass(userid int64, wanted int64) []*Honk {
 
 func gethonksforme(userid int64, wanted int64) []*Honk {
 	dt := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(dbtimeformat)
-	rows, err := stmtHonksForMe.Query(wanted, userid, dt, userid)
+	rows, err := stmtHonksForMe.Query(wanted, userid, dt, userid, 250)
 	return getsomehonks(rows, err)
 }
 func gethonksfromlongago(userid int64, wanted int64) []*Honk {
@@ -1184,7 +1184,7 @@ func prepareStatements(db *sql.DB) {
 	myhonkers := " and honker in (select xid from honkers where userid = ? and (flavor = 'sub' or flavor = 'peep' or flavor = 'presub') and combos not like '% - %')"
 	stmtHonksForUser = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ?"+myhonkers+butnotthose+limit)
 	stmtHonksForUserFirstClass = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and (rid = '' or what = 'bonk')"+myhonkers+butnotthose+limit)
-	stmtHonksForMe = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and whofore = 1"+butnotthose+limit)
+	stmtHonksForMe = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and whofore = 1"+butnotthose+smalllimit)
 	stmtHonksFromLongAgo = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and dt < ? and whofore = 2"+butnotthose+limit)
 	stmtHonksISaved = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and flags & 4 order by honks.honkid desc")
 	stmtHonksByHonker = preparetodie(db, selecthonks+"join honkers on (honkers.xid = honks.honker or honkers.xid = honks.oonker) where honks.honkid > ? and honks.userid = ? and honkers.name = ?"+butnotthose+limit)

@@ -118,8 +118,9 @@ func deliverate(userid int64, rcpt string, msg []byte) {
 var garage = gate.NewLimiter(40)
 
 func deliveration(doover Doover) {
-	garage.Start()
-	defer garage.Finish()
+	rcpt := doover.Rcpt
+	garage.StartKey(rcpt)
+	defer garage.FinishKey(rcpt)
 
 	var ki *KeyInfo
 	ok := ziggies.Get(doover.Userid, &ki)
@@ -128,7 +129,6 @@ func deliveration(doover Doover) {
 		return
 	}
 	var inbox string
-	rcpt := doover.Rcpt
 	// already did the box indirection
 	if rcpt[0] == '%' {
 		inbox = rcpt[1:]

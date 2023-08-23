@@ -119,9 +119,14 @@ func main() {
 		adminscreen()
 	case "import":
 		if len(args) != 4 {
-			elog.Fatal("import username mastodon|twitter srcdir")
+			elog.Fatal("import username honk|mastodon|twitter srcdir")
 		}
 		importMain(args[1], args[2], args[3])
+	case "export":
+		if len(args) != 3 {
+			elog.Fatal("export username destdir")
+		}
+		export(args[1], args[2])
 	case "devel":
 		if len(args) != 2 {
 			elog.Fatal("need an argument: devel (on|off)")
