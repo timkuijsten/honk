@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"humungus.tedunangst.com/r/webs/cache"
+	"humungus.tedunangst.com/r/webs/htfilter"
 	"humungus.tedunangst.com/r/webs/httpsig"
 	"humungus.tedunangst.com/r/webs/login"
 	"humungus.tedunangst.com/r/webs/mz"
@@ -342,7 +343,7 @@ func gethonksbysearch(userid int64, q string, wanted int64) []*Honk {
 			continue
 		}
 		t = "%" + t + "%"
-		queries = append(queries, "noise"+negate+"like ?")
+		queries = append(queries, negate+"(plain like ?)")
 		params = append(params, t)
 	}
 
@@ -504,8 +505,6 @@ func donksforhonks(honks []*Honk) {
 				elog.Printf("error parsing badonks: %s", err)
 				continue
 			}
-		case "wonkles":
-		case "guesses":
 		case "oldrev":
 		default:
 			elog.Printf("unknown meta genus: %s", genus)
@@ -790,6 +789,30 @@ func loadchatter(userid int64) []*Chatter {
 	return chatter
 }
 
+func (honk *Honk) Plain() string {
+	var plain []string
+	var filt htfilter.Filter
+	filt.WithLinks = true
+	if honk.Precis != "" {
+		t, _ := filt.TextOnly(honk.Precis)
+		plain = append(plain, t)
+	}
+	if honk.Format == "html" {
+		t, _ := filt.TextOnly(honk.Noise)
+		plain = append(plain, t)
+	} else {
+		plain = append(plain, honk.Noise)
+	}
+	for _, d := range honk.Donks {
+		plain = append(plain, d.Name)
+		plain = append(plain, d.Desc)
+	}
+	for _, o := range honk.Onts {
+		plain = append(plain, o)
+	}
+	return strings.Join(plain, " ")
+}
+
 func savehonk(h *Honk) error {
 	dt := h.Date.UTC().Format(dbtimeformat)
 	aud := strings.Join(h.Audience, " ")
@@ -800,10 +823,11 @@ func savehonk(h *Honk) error {
 		elog.Printf("can't begin tx: %s", err)
 		return err
 	}
+	plain := h.Plain()
 
 	res, err := tx.Stmt(stmtSaveHonk).Exec(h.UserID, h.What, h.Honker, h.XID, h.RID, dt, h.URL,
 		aud, h.Noise, h.Convoy, h.Whofore, h.Format, h.Precis,
-		h.Oonker, h.Flags)
+		h.Oonker, h.Flags, plain)
 	if err == nil {
 		h.ID, _ = res.LastInsertId()
 		err = saveextras(tx, h)
@@ -834,10 +858,11 @@ func updatehonk(h *Honk) error {
 		elog.Printf("can't begin tx: %s", err)
 		return err
 	}
+	plain := h.Plain()
 
 	err = deleteextras(tx, h.ID, false)
 	if err == nil {
-		_, err = tx.Stmt(stmtUpdateHonk).Exec(h.Precis, h.Noise, h.Format, h.Whofore, dt, h.ID)
+		_, err = tx.Stmt(stmtUpdateHonk).Exec(h.Precis, h.Noise, h.Format, h.Whofore, dt, plain, h.ID)
 	}
 	if err == nil {
 		err = saveextras(tx, h)
@@ -1096,7 +1121,7 @@ func cleanupdb(arg string) {
 	if err != nil {
 		elog.Fatal(err)
 	}
-	for xid, _ := range filexids {
+	for xid := range filexids {
 		_, err = tx.Exec("delete from filedata where xid = ?", xid)
 		if err != nil {
 			elog.Fatal(err)
@@ -1151,14 +1176,14 @@ func prepareStatements(db *sql.DB) {
 	smalllimit := " order by honks.honkid desc limit ?"
 	butnotthose := " and convoy not in (select name from zonkers where userid = ? and wherefore = 'zonvoy' order by zonkerid desc limit 100)"
 	stmtOneXonk = preparetodie(db, selecthonks+"where honks.userid = ? and xid = ?")
-	stmtAnyXonk = preparetodie(db, selecthonks+"where xid = ? order by honks.honkid asc")
+	stmtAnyXonk = preparetodie(db, selecthonks+"where xid = ? and what <> 'bonk' order by honks.honkid asc")
 	stmtOneBonk = preparetodie(db, selecthonks+"where honks.userid = ? and xid = ? and what = 'bonk' and whofore = 2")
 	stmtPublicHonks = preparetodie(db, selecthonks+"where whofore = 2 and dt > ?"+smalllimit)
 	stmtEventHonks = preparetodie(db, selecthonks+"where (whofore = 2 or honks.userid = ?) and what = 'event'"+smalllimit)
 	stmtUserHonks = preparetodie(db, selecthonks+"where honks.honkid > ? and (whofore = 2 or whofore = ?) and username = ? and dt > ?"+smalllimit)
 	myhonkers := " and honker in (select xid from honkers where userid = ? and (flavor = 'sub' or flavor = 'peep' or flavor = 'presub') and combos not like '% - %')"
 	stmtHonksForUser = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ?"+myhonkers+butnotthose+limit)
-	stmtHonksForUserFirstClass = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and (what <> 'tonk')"+myhonkers+butnotthose+limit)
+	stmtHonksForUserFirstClass = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and (rid = '' or what = 'bonk')"+myhonkers+butnotthose+limit)
 	stmtHonksForMe = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and whofore = 1"+butnotthose+limit)
 	stmtHonksFromLongAgo = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and dt > ? and dt < ? and whofore = 2"+butnotthose+limit)
 	stmtHonksISaved = preparetodie(db, selecthonks+"where honks.honkid > ? and honks.userid = ? and flags & 4 order by honks.honkid desc")
@@ -1172,9 +1197,9 @@ func prepareStatements(db *sql.DB) {
 	stmtDeleteAllMeta = preparetodie(db, "delete from honkmeta where honkid = ?")
 	stmtDeleteSomeMeta = preparetodie(db, "delete from honkmeta where honkid = ? and genus not in ('oldrev')")
 	stmtDeleteOneMeta = preparetodie(db, "delete from honkmeta where honkid = ? and genus = ?")
-	stmtSaveHonk = preparetodie(db, "insert into honks (userid, what, honker, xid, rid, dt, url, audience, noise, convoy, whofore, format, precis, oonker, flags) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+	stmtSaveHonk = preparetodie(db, "insert into honks (userid, what, honker, xid, rid, dt, url, audience, noise, convoy, whofore, format, precis, oonker, flags, plain) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 	stmtDeleteHonk = preparetodie(db, "delete from honks where honkid = ?")
-	stmtUpdateHonk = preparetodie(db, "update honks set precis = ?, noise = ?, format = ?, whofore = ?, dt = ? where honkid = ?")
+	stmtUpdateHonk = preparetodie(db, "update honks set precis = ?, noise = ?, format = ?, whofore = ?, dt = ?, plain = ? where honkid = ?")
 	stmtSaveOnt = preparetodie(db, "insert into onts (ontology, honkid) values (?, ?)")
 	stmtDeleteOnts = preparetodie(db, "delete from onts where honkid = ?")
 	stmtSaveDonk = preparetodie(db, "insert into donks (honkid, chonkid, fileid) values (?, ?, ?)")

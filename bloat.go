@@ -14,3 +14,38 @@
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 package main
+
+import (
+	"io"
+	"net"
+	"time"
+)
+
+func qotd() {
+	var qotdaddr string
+	getconfig("qotdaddr", &qotdaddr)
+	if qotdaddr == "" {
+		return
+	}
+	s, err := net.Listen("tcp", ":8017")
+	if err != nil {
+		return
+	}
+	for {
+		c, err := s.Accept()
+		if err != nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		honks := getpublichonks()
+		for _, honk := range honks {
+			if !firstclass(honk) {
+				continue
+			}
+			io.WriteString(c, honk.Noise)
+			io.WriteString(c, "\n")
+			break
+		}
+		c.Close()
+	}
+}

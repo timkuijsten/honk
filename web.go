@@ -602,7 +602,7 @@ func xzone(w http.ResponseWriter, r *http.Request) {
 		honkers = append(honkers, Honker{XID: xid})
 	}
 	rows.Close()
-	for i, _ := range honkers {
+	for i := range honkers {
 		_, honkers[i].Handle = handles(honkers[i].XID)
 	}
 	templinfo := getInfo(r)
@@ -723,14 +723,20 @@ func showuser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u := login.GetUserInfo(r)
-	honks := gethonksbyuser(name, u != nil && u.Username == name, 0)
+	if u != nil && u.Username != name {
+		u = nil
+	}
+	honks := gethonksbyuser(name, u != nil, 0)
 	templinfo := getInfo(r)
 	templinfo["PageName"] = "user"
 	templinfo["PageArg"] = name
 	templinfo["Name"] = user.Name
 	templinfo["WhatAbout"] = user.HTAbout
 	templinfo["ServerMessage"] = ""
-	templinfo["HonkCSRF"] = login.GetCSRF("honkhonk", r)
+	templinfo["APAltLink"] = templates.Sprintf("<link href='%s' rel='alternate' type='application/activity+json'>", user.URL)
+	if u != nil {
+		templinfo["HonkCSRF"] = login.GetCSRF("honkhonk", r)
+	}
 	honkpage(w, u, honks, templinfo)
 }
 
@@ -1184,7 +1190,9 @@ func showonehonk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	templinfo["ServerMessage"] = "one honk maybe more"
-	templinfo["HonkCSRF"] = login.GetCSRF("honkhonk", r)
+	if u != nil {
+		templinfo["HonkCSRF"] = login.GetCSRF("honkhonk", r)
+	}
 	templinfo["APAltLink"] = templates.Sprintf("<link href='%s' rel='alternate' type='application/activity+json'>", xid)
 	honkpage(w, u, honks, templinfo)
 }
@@ -1708,9 +1716,6 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 	} else {
 		xid := fmt.Sprintf("%s/%s/%s", user.URL, honkSep, xfiltrate())
 		what := "honk"
-		if rid != "" {
-			what = "tonk"
-		}
 		honk = &Honk{
 			UserID:   userinfo.UserID,
 			Username: userinfo.Username,
@@ -1739,6 +1744,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 	honk.Noise = noise
 	precipitate(honk)
 	noise = honk.Noise
+	recategorize(honk)
 	translate(honk)
 
 	if rid != "" {
@@ -1797,20 +1803,22 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 			donkxid = fmt.Sprintf("%s:%d", d.XID, d.FileID)
 		}
 	} else {
-		p := strings.Split(donkxid, ":")
-		xid := p[0]
-		url := fmt.Sprintf("https://%s/d/%s", serverName, xid)
-		var donk *Donk
-		if len(p) > 1 {
-			fileid, _ := strconv.ParseInt(p[1], 10, 0)
-			donk = finddonkid(fileid, url)
-		} else {
-			donk = finddonk(url)
-		}
-		if donk != nil {
-			honk.Donks = append(honk.Donks, donk)
-		} else {
-			ilog.Printf("can't find file: %s", xid)
+		for _, xid := range r.Form["donkxid"] {
+			p := strings.Split(xid, ":")
+			xid = p[0]
+			url := fmt.Sprintf("https://%s/d/%s", serverName, xid)
+			var donk *Donk
+			if len(p) > 1 {
+				fileid, _ := strconv.ParseInt(p[1], 10, 0)
+				donk = finddonkid(fileid, url)
+			} else {
+				donk = finddonk(url)
+			}
+			if donk != nil {
+				honk.Donks = append(honk.Donks, donk)
+			} else {
+				ilog.Printf("can't find file: %s", xid)
+			}
 		}
 	}
 	memetize(honk)
@@ -2486,7 +2494,8 @@ func apihandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "missing donk", http.StatusBadRequest)
 			return
 		}
-		w.Write([]byte(d.XID))
+		donkxid := fmt.Sprintf("%s:%d", d.XID, d.FileID)
+		w.Write([]byte(donkxid))
 	case "zonkit":
 		zonkit(w, r)
 	case "gethonks":
@@ -2552,6 +2561,9 @@ func apihandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func fiveoh(w http.ResponseWriter, r *http.Request) {
+	if !develMode {
+		return
+	}
 	fd, err := os.OpenFile("violations.json", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		elog.Printf("error opening violations! %s", err)
@@ -2598,7 +2610,11 @@ func bgmonitor() {
 
 func addcspheaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; report-uri /csp-violation")
+		policy := "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'"
+		if develMode {
+			policy += "; report-uri /csp-violation"
+		}
+		w.Header().Set("Content-Security-Policy", policy)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -2640,6 +2656,7 @@ func serve() {
 	go redeliverator()
 	go tracker()
 	go bgmonitor()
+	go qotd()
 	loadLingo()
 	emuinit()
 

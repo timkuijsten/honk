@@ -69,6 +69,14 @@ func lethaldose(err error) int64 {
 	return 0
 }
 
+func letitslide(err error) bool {
+	str := err.Error()
+	if strings.Contains(str, "http post status: 400") {
+		return true
+	}
+	return false
+}
+
 var dqmtx sync.Mutex
 
 func delinquent(userid int64, rcpt string, msg []byte) bool {
@@ -143,6 +151,10 @@ func deliveration(doover Doover) {
 			ilog.Printf("failed to post json to %s: %s", inbox, err)
 			if t := lethaldose(err); t > doover.Tries {
 				doover.Tries = t
+			}
+			if letitslide(err) {
+				dlog.Printf("whatever myever %s", inbox)
+				continue
 			}
 			doover.Msgs = doover.Msgs[i:]
 			sayitagain(doover)

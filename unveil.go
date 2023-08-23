@@ -25,11 +25,10 @@ package main
 import "C"
 
 import (
-	"fmt"
 	"unsafe"
 )
 
-func Unveil(path string, perms string) error {
+func Unveil(path string, perms string) {
 	cpath := C.CString(path)
 	defer C.free(unsafe.Pointer(cpath))
 	cperms := C.CString(perms)
@@ -37,20 +36,18 @@ func Unveil(path string, perms string) error {
 
 	rv, err := C.unveil(cpath, cperms)
 	if rv != 0 {
-		return fmt.Errorf("unveil(%s, %s) failure (%d)", path, perms, err)
+		elog.Fatalf("unveil(%s, %s) failure (%d)", path, perms, err)
 	}
-	return nil
 }
 
-func Pledge(promises string) error {
+func Pledge(promises string) {
 	cpromises := C.CString(promises)
 	defer C.free(unsafe.Pointer(cpromises))
 
 	rv, err := C.pledge(cpromises, nil)
 	if rv != 0 {
-		return fmt.Errorf("pledge(%s) failure (%d)", promises, err)
+		elog.Fatalf("pledge(%s) failure (%d)", promises, err)
 	}
-	return nil
 }
 
 func init() {

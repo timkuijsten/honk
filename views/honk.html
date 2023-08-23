@@ -52,7 +52,7 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 </header>
 <p>
 <details class="noise" {{ .Open }} >
-<summary>{{ .HTPrecis }}<p></summary>
+<summary class="noise">{{ .HTPrecis }}<p></summary>
 <p>{{ .HTPrecis }}
 <p class="content">{{ .HTML }}
 {{ with .Time }}
@@ -72,7 +72,7 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ if $omitimages }}
 <p><a href="/d/{{ .XID }}">Image: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}
 {{ else }}
-<p><img src="/d/{{ .XID }}" title="{{ .Desc }}" alt="{{ .Desc }}">
+<p><img src="/d/{{ .XID }}" loading=lazy title="{{ .Desc }}" alt="{{ .Desc }}">
 {{ end }}
 {{ end }}
 {{ else }}

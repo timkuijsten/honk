@@ -19,10 +19,11 @@ import (
 	"database/sql"
 	"os"
 	"strings"
-	"time"
+
+	"humungus.tedunangst.com/r/webs/htfilter"
 )
 
-var myVersion = 42
+var myVersion = 45
 
 type dbexecer interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
@@ -41,164 +42,26 @@ func upgradedb() {
 	getconfig("dbversion", &dbversion)
 	getconfig("servername", &serverName)
 
-	if dbversion < 13 {
+	if dbversion < 40 {
 		elog.Fatal("database is too old to upgrade")
 	}
+	var err error
+	var tx *sql.Tx
+	try := func(s string, args ...interface{}) {
+		if tx != nil {
+			_, err = tx.Exec(s, args...)
+		} else {
+			_, err = db.Exec(s, args...)
+		}
+		if err != nil {
+			elog.Fatalf("can't run %s: %s", s, err)
+		}
+	}
+	setV := func(ver int64) {
+		try("update config set value = ? where key = 'dbversion'", ver)
+	}
+
 	switch dbversion {
-	case 25:
-		doordie(db, "delete from auth")
-		doordie(db, "alter table auth add column expiry text")
-		doordie(db, "update config set value = 26 where key = 'dbversion'")
-		fallthrough
-	case 26:
-		s := ""
-		getconfig("servermsg", &s)
-		if s == "" {
-			setconfig("servermsg", "<h2>Things happen.</h2>")
-		}
-		s = ""
-		getconfig("aboutmsg", &s)
-		if s == "" {
-			setconfig("aboutmsg", "<h3>What is honk?</h3><p>Honk is amazing!")
-		}
-		s = ""
-		getconfig("loginmsg", &s)
-		if s == "" {
-			setconfig("loginmsg", "<h2>login</h2>")
-		}
-		d := -1
-		getconfig("devel", &d)
-		if d == -1 {
-			setconfig("devel", 0)
-		}
-		doordie(db, "update config set value = 27 where key = 'dbversion'")
-		fallthrough
-	case 27:
-		createserveruser(db)
-		doordie(db, "update config set value = 28 where key = 'dbversion'")
-		fallthrough
-	case 28:
-		doordie(db, "drop table doovers")
-		doordie(db, "create table doovers(dooverid integer primary key, dt text, tries integer, userid integer, rcpt text, msg blob)")
-		doordie(db, "update config set value = 29 where key = 'dbversion'")
-		fallthrough
-	case 29:
-		doordie(db, "alter table honkers add column owner text")
-		doordie(db, "update honkers set owner = xid")
-		doordie(db, "update config set value = 30 where key = 'dbversion'")
-		fallthrough
-	case 30:
-		tx, err := db.Begin()
-		if err != nil {
-			elog.Fatal(err)
-		}
-		rows, err := tx.Query("select userid, options from users")
-		if err != nil {
-			elog.Fatal(err)
-		}
-		m := make(map[int64]string)
-		for rows.Next() {
-			var userid int64
-			var options string
-			err = rows.Scan(&userid, &options)
-			if err != nil {
-				elog.Fatal(err)
-			}
-			var uo UserOptions
-			uo.SkinnyCSS = strings.Contains(options, " skinny ")
-			m[userid], err = jsonify(uo)
-			if err != nil {
-				elog.Fatal(err)
-			}
-		}
-		rows.Close()
-		for u, o := range m {
-			_, err = tx.Exec("update users set options = ? where userid = ?", o, u)
-			if err != nil {
-				elog.Fatal(err)
-			}
-		}
-		err = tx.Commit()
-		if err != nil {
-			elog.Fatal(err)
-		}
-		doordie(db, "update config set value = 31 where key = 'dbversion'")
-		fallthrough
-	case 31:
-		doordie(db, "create table tracks (xid text, fetches text)")
-		doordie(db, "create index idx_trackhonkid on tracks(xid)")
-		doordie(db, "update config set value = 32 where key = 'dbversion'")
-		fallthrough
-	case 32:
-		doordie(db, "alter table xonkers add column dt text")
-		doordie(db, "update xonkers set dt = ?", time.Now().UTC().Format(dbtimeformat))
-		doordie(db, "update config set value = 33 where key = 'dbversion'")
-		fallthrough
-	case 33:
-		doordie(db, "alter table honkers add column meta text")
-		doordie(db, "update honkers set meta = '{}'")
-		doordie(db, "update config set value = 34 where key = 'dbversion'")
-		fallthrough
-	case 34:
-		doordie(db, "create table chonks (chonkid integer primary key, userid integer, xid text, who txt, target text, dt text, noise text, format text)")
-		doordie(db, "update config set value = 35 where key = 'dbversion'")
-		fallthrough
-	case 35:
-		doordie(db, "alter table donks add column chonkid integer")
-		doordie(db, "update donks set chonkid = -1")
-		doordie(db, "create index idx_donkshonk on donks(honkid)")
-		doordie(db, "create index idx_donkschonk on donks(chonkid)")
-		doordie(db, "update config set value = 36 where key = 'dbversion'")
-		fallthrough
-	case 36:
-		doordie(db, "alter table honkers add column folxid text")
-		doordie(db, "update honkers set folxid = 'lostdata'")
-		doordie(db, "update config set value = 37 where key = 'dbversion'")
-		fallthrough
-	case 37:
-		doordie(db, "update honkers set combos = '' where combos is null")
-		doordie(db, "update honkers set owner = '' where owner is null")
-		doordie(db, "update honkers set meta = '' where meta is null")
-		doordie(db, "update honkers set folxid = '' where folxid is null")
-		doordie(db, "update config set value = 38 where key = 'dbversion'")
-		fallthrough
-	case 38:
-		doordie(db, "update honkers set folxid = abs(random())")
-		doordie(db, "update config set value = 39 where key = 'dbversion'")
-		fallthrough
-	case 39:
-		blobdb := openblobdb()
-		doordie(blobdb, "alter table filedata add column hash text")
-		doordie(blobdb, "create index idx_filehash on filedata(hash)")
-		rows, err := blobdb.Query("select xid, content from filedata")
-		if err != nil {
-			elog.Fatal(err)
-		}
-		m := make(map[string]string)
-		for rows.Next() {
-			var xid string
-			var data sql.RawBytes
-			err := rows.Scan(&xid, &data)
-			if err != nil {
-				elog.Fatal(err)
-			}
-			hash := hashfiledata(data)
-			m[xid] = hash
-		}
-		rows.Close()
-		tx, err := blobdb.Begin()
-		if err != nil {
-			elog.Fatal(err)
-		}
-		for xid, hash := range m {
-			doordie(tx, "update filedata set hash = ? where xid = ?", hash, xid)
-		}
-		err = tx.Commit()
-		if err != nil {
-			elog.Fatal(err)
-		}
-		doordie(db, "update config set value = 40 where key = 'dbversion'")
-		fallthrough
 	case 40:
 		doordie(db, "PRAGMA journal_mode=WAL")
 		blobdb := openblobdb()
@@ -238,6 +101,77 @@ func upgradedb() {
 		doordie(db, "update config set value = 42 where key = 'dbversion'")
 		fallthrough
 	case 42:
+		doordie(db, "update honks set what = 'honk', flags = flags & ~ 32 where what = 'tonk' or what = 'wonk'")
+		doordie(db, "delete from honkmeta where genus = 'wonkles' or genus = 'guesses'")
+		doordie(db, "update config set value = 43 where key = 'dbversion'")
+		fallthrough
+	case 43:
+		try("alter table honks add column plain text")
+		try("update honks set plain = ''")
+		setV(44)
+		fallthrough
+	case 44:
+		makeplain := func(noise, precis, format string) []string {
+			var plain []string
+			var filt htfilter.Filter
+			filt.WithLinks = true
+			if precis != "" {
+				t, _ := filt.TextOnly(precis)
+				plain = append(plain, t)
+			}
+			if format == "html" {
+				t, _ := filt.TextOnly(noise)
+				plain = append(plain, t)
+			} else {
+				plain = append(plain, noise)
+			}
+			return plain
+		}
+		tx, err = db.Begin()
+		if err != nil {
+			elog.Fatal(err)
+		}
+		plainmap := make(map[int64][]string)
+		rows, err := tx.Query("select honkid, noise, precis, format from honks")
+		if err != nil {
+			elog.Fatal(err)
+		}
+		for rows.Next() {
+			var honkid int64
+			var noise, precis, format string
+			err = rows.Scan(&honkid, &noise, &precis, &format)
+			if err != nil {
+				elog.Fatal(err)
+			}
+			plainmap[honkid] = makeplain(noise, precis, format)
+		}
+		rows.Close()
+		rows, err = tx.Query("select honkid, name, description from donks join filemeta on donks.fileid = filemeta.fileid")
+		if err != nil {
+			elog.Fatal(err)
+		}
+		for rows.Next() {
+			var honkid int64
+			var name, desc string
+			err = rows.Scan(&honkid, &name, &desc)
+			if err != nil {
+				elog.Fatal(err)
+			}
+			plainmap[honkid] = append(plainmap[honkid], name)
+			plainmap[honkid] = append(plainmap[honkid], desc)
+		}
+		rows.Close()
+		for honkid, plain := range plainmap {
+			try("update honks set plain = ? where honkid = ?", strings.Join(plain, " "), honkid)
+		}
+		setV(45)
+		err = tx.Commit()
+		if err != nil {
+			elog.Fatal(err)
+		}
+		tx = nil
+		fallthrough
+	case 45:
 
 	default:
 		elog.Fatalf("can't upgrade unknown version %d", dbversion)
