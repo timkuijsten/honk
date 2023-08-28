@@ -1,0 +1,183 @@
+html {
+	--bg-page: #191b22;
+	--bg-dark: #282c37;
+	--fg: #b9b9ba;
+	--hl: #393f4f;
+	--fg-subtle: #606984;
+
+	scrollbar-color: #313543 rgba(0,0,0,.1);
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+body {
+	font-family: system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Oxygen,Ubuntu,Cantarell,Fira Sans,Droid Sans,Helvetica Neue,"mastodon-font-sans-serif",sans-serif;
+	font-size: 13px;
+	line-height: 18px;
+	font-weight: 400;
+	color: #fff;
+}
+
+form, input, textarea {
+	font-family: inherit;
+	border-radius: 4px;
+	border: 0;
+}
+
+input {
+	color: #9baec8;
+}
+
+body > header {
+	margin: 0 auto;
+}
+
+h1, h2, h3, h4 {
+	font-weight: normal;
+}
+
+.honk .noise {
+	font-size: 15px;
+	line-height: 22px;
+}
+
+.honk, .info {
+	border: inherit;
+	border-bottom: 1px solid #393f4f;
+	border-radius: 0;
+	margin-bottom: 0;
+	padding: 16px;
+}
+
+.honk header {
+	color: #606984;
+	font-size: 15px;
+	font-weight: 500;
+	padding: 0;
+	margin: 0;
+	line-height: 22px;
+}
+
+details p a, .subtle .noise a {
+	color: #d9e1e8;
+}
+
+details p {
+	color: #fff;
+}
+
+.buttonarray button, label.button, button, select {
+	background-color: #6d6eff;
+	border: 10px;
+	border-radius: 4px;
+	box-sizing: border-box;
+	color: #fff;
+	cursor: pointer;
+	font-size: 15px;
+	font-weight: 500;
+	font-family: inherit;
+	letter-spacing: 0;
+	line-height: 22px;
+	overflow: hidden;
+	padding: 7px 18px;
+	position: relative;
+	text-align: center;
+	text-decoration: none;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	width: auto;
+}
+
+button a, .honk button a {
+	color: #fff;
+}
+
+/*
+ * Honk form
+ */
+
+textarea#honknoise {
+	min-height: 100px;
+	padding-bottom: 0;
+	padding-right: 32px;
+	resize: none;
+	scrollbar-color: auto;
+	box-sizing: border-box;
+	width: 100%;
+	margin: 0;
+	padding: 10px;
+	font-family: inherit;
+	font-size: 14px;
+	border: 0;
+	outline: 0;
+}
+
+#honkform input[type=text] {
+	box-sizing: border-box;
+	font-size: 16px;
+	color: #fff;
+	background: #131419;
+	border: 1px solid #0a0b0e;
+	border-top-color: rgb(10, 11, 14);
+	border-right-color: rgb(10, 11, 14);
+	border-bottom-color: rgb(10, 11, 14);
+	border-left-color: rgb(10, 11, 14);
+	padding: 10px;
+}
+
+.skinny main {
+	padding: 0 10px;
+	max-width: 600px;
+}
+
+.honk header a, .honk header {
+	font-size: 15px;
+	line-height: 22px;
+	font-weight: 500;
+	color: #606984;
+}
+
+.honk a {
+	text-decoration: none;
+}
+
+.honk a:hover {
+	text-decoration: underline;
+}
+
+button::first-letter, label.button::first-letter {
+	text-transform: capitalize;
+}
+
+/*
+ * Menu
+ */
+
+#topmenu > span {
+	display: none;
+}
+
+header > details[open] {
+	background-color: var(--bg-page);
+	border: none;
+}
+
+header > details li a:hover {
+	color: #fff;
+}
+
+header > details li a {
+	color: #d9e1e8;
+	font-size: 16px;
+	padding: 15px;
+	text-decoration: none;
+}
+
+header > details li::first-letter {
+	text-transform: capitalize;
+}
+
+header > details ul {
+	list-style: none;
+}
