@@ -384,13 +384,13 @@ function hideelement(el) {
 	if (!el) return
 	el.style.display = "none"
 }
-function updatedonker() {
-	var el = document.getElementById("donker")
+function updatedonker(ev) {
+	var el = ev.target.parentElement
 	el.children[1].textContent = el.children[0].value.slice(-20)
-	el = document.getElementById("donkdescriptor")
-	el.style.display = ""
-	el = document.getElementById("saveddonkxid")
+	el = el.nextSibling
 	el.value = ""
+	el = el.parentElement.nextSibling
+	el.style.display = ""
 }
 var checkinprec = 100.0
 var gpsoptions = {
@@ -416,6 +416,55 @@ function fillcheckin() {
 		}, gpsoptions)
 	}
 }
+
+function scrollnexthonk() {
+	var honks = document.getElementsByClassName("honk");
+	for (var i = 0; i < honks.length; i++) {
+		var h = honks[i];
+		var b = h.getBoundingClientRect();
+		if (b.top > 1.0) {
+			h.scrollIntoView();
+			break;
+		}
+	}
+}
+
+function scrollprevioushonk() {
+	var honks = document.getElementsByClassName("honk");
+	for (var i = 1; i < honks.length; i++) {
+		var b = honks[i].getBoundingClientRect();
+		if (b.top > -1.0) {
+			honks[i-1].scrollIntoView();
+			break;
+		}
+	}
+}
+
+document.addEventListener("keydown", function(e) {
+	if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
+		return;
+
+	switch (e.code) {
+	case "KeyR":
+		refreshhonks(document.getElementById("honkrefresher"));
+		break;
+	case "KeyS":
+		oldestnewest(document.getElementById("newerscroller"));
+		break;
+	case "KeyJ":
+		scrollnexthonk();
+		break;
+	case "KeyK":
+		scrollprevioushonk();
+		break;
+	case "Slash":
+		document.getElementById("topmenu").open = true
+		document.getElementById("searchbox").focus()
+		e.preventDefault()
+		break
+	}
+})
+
 function addemu(elem) {
 	const data = elem.alt
 	const box = document.getElementById("honknoise");

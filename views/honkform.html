@@ -9,8 +9,7 @@
 <details>
 <summary>more options</summary>
 <p>
-<label class=button id="donker">attach: <input type="file" name="donk"><span>{{ .SavedFile }}</span></label>
-<input type="hidden" id="saveddonkxid" name="donkxid" value="{{ .SavedFile }}">
+<label class=button id="donker">attach: <input type="file" multiple name="donk"><span>{{ .SavedFile }}</span></label><input type="hidden" id="saveddonkxid" name="donkxid" value="{{ .SavedFile }}">
 <p id="donkdescriptor"><label for=donkdesc>description:</label><br>
 <input type="text" name="donkdesc" value="{{ .DonkDesc }}" autocomplete=off>
 {{ with .SavedPlace }}

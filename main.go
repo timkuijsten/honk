@@ -64,6 +64,11 @@ func reexecArgs(cmd string) []string {
 
 var elog, ilog, dlog *golog.Logger
 
+func errx(msg string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, msg, args...)
+	os.Exit(1)
+}
+
 func main() {
 	flag.StringVar(&dataDir, "datadir", dataDir, "data directory")
 	flag.StringVar(&viewDir, "viewdir", viewDir, "view directory")
@@ -112,6 +117,8 @@ func main() {
 	getconfig("devel", &develMode)
 	getconfig("fasttimeout", &fastTimeout)
 	getconfig("slowtimeout", &slowTimeout)
+	getconfig("honkwindow", &honkwindow)
+	honkwindow *= 24 * time.Hour
 	getconfig("signgets", &signGets)
 	prepareStatements(db)
 	switch cmd {
@@ -119,17 +126,17 @@ func main() {
 		adminscreen()
 	case "import":
 		if len(args) != 4 {
-			elog.Fatal("import username honk|mastodon|twitter srcdir")
+			errx("import username honk|mastodon|twitter srcdir")
 		}
 		importMain(args[1], args[2], args[3])
 	case "export":
 		if len(args) != 3 {
-			elog.Fatal("export username destdir")
+			errx("export username destdir")
 		}
 		export(args[1], args[2])
 	case "devel":
 		if len(args) != 2 {
-			elog.Fatal("need an argument: devel (on|off)")
+			errx("need an argument: devel (on|off)")
 		}
 		switch args[1] {
 		case "on":
@@ -137,11 +144,11 @@ func main() {
 		case "off":
 			setconfig("devel", 0)
 		default:
-			elog.Fatal("argument must be on or off")
+			errx("argument must be on or off")
 		}
 	case "setconfig":
 		if len(args) != 3 {
-			elog.Fatal("need an argument: setconfig key val")
+			errx("need an argument: setconfig key val")
 		}
 		var val interface{}
 		var err error
@@ -153,66 +160,55 @@ func main() {
 		adduser()
 	case "deluser":
 		if len(args) < 2 {
-			fmt.Printf("usage: honk deluser username\n")
-			return
+			errx("usage: honk deluser username\n")
 		}
 		deluser(args[1])
 	case "chpass":
 		if len(args) < 2 {
-			fmt.Printf("usage: honk chpass username\n")
-			return
+			errx("usage: honk chpass username\n")
 		}
 		chpass(args[1])
 	case "follow":
 		if len(args) < 3 {
-			fmt.Printf("usage: honk follow username url\n")
-			return
+			errx("usage: honk follow username url\n")
 		}
 		user, err := butwhatabout(args[1])
 		if err != nil {
-			fmt.Printf("user not found\n")
-			return
+			errx("user %s not found\n", args[1])
 		}
 		var meta HonkerMeta
 		mj, _ := jsonify(&meta)
 		honkerid, err := savehonker(user, args[2], "", "presub", "", mj)
 		if err != nil {
-			fmt.Printf("had some trouble with that: %s\n", err)
-			return
+			errx("had some trouble with that: %s\n", err)
 		}
 		followyou(user, honkerid, true)
 	case "unfollow":
 		if len(args) < 3 {
-			fmt.Printf("usage: honk unfollow username url\n")
-			return
+			errx("usage: honk unfollow username url\n")
 		}
 		user, err := butwhatabout(args[1])
 		if err != nil {
-			fmt.Printf("user not found\n")
-			return
+			errx("user not found\n")
 		}
 		row := db.QueryRow("select honkerid from honkers where xid = ? and userid = ? and flavor in ('sub')", args[2], user.ID)
 		var honkerid int64
 		err = row.Scan(&honkerid)
 		if err != nil {
-			fmt.Printf("sorry couldn't find them\n")
-			return
+			errx("sorry couldn't find them\n")
 		}
 		unfollowyou(user, honkerid, true)
 	case "sendmsg":
 		if len(args) < 4 {
-			fmt.Printf("usage: honk send username filename rcpt\n")
-			return
+			errx("usage: honk send username filename rcpt\n")
 		}
 		user, err := butwhatabout(args[1])
 		if err != nil {
-			fmt.Printf("user not found\n")
-			return
+			errx("user %s not found\n", args[1])
 		}
 		data, err := os.ReadFile(args[2])
 		if err != nil {
-			fmt.Printf("can't read file\n")
-			return
+			errx("can't read file: %s\n", err)
 		}
 		deliverate(user.ID, args[3], data)
 	case "cleanup":
@@ -223,29 +219,25 @@ func main() {
 		cleanupdb(arg)
 	case "unplug":
 		if len(args) < 2 {
-			fmt.Printf("usage: honk unplug servername\n")
-			return
+			errx("usage: honk unplug servername\n")
 		}
 		name := args[1]
 		unplugserver(name)
 	case "backup":
 		if len(args) < 2 {
-			fmt.Printf("usage: honk backup dirname\n")
-			return
+			errx("usage: honk backup dirname\n")
 		}
 		name := args[1]
 		svalbard(name)
 	case "ping":
 		if len(args) < 3 {
-			fmt.Printf("usage: honk ping (from username) (to username or url)\n")
-			return
+			errx("usage: honk ping (from username) (to username or url)\n")
 		}
 		name := args[1]
 		targ := args[2]
 		user, err := butwhatabout(name)
 		if err != nil {
-			elog.Printf("unknown user")
-			return
+			errx("unknown user %s", name)
 		}
 		ping(user, targ)
 	case "run":
@@ -255,6 +247,6 @@ func main() {
 	case "test":
 		ElaborateUnitTests()
 	default:
-		elog.Fatal("unknown command")
+		errx("unknown command")
 	}
 }

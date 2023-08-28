@@ -18,8 +18,8 @@
 </div>
 {{ if and .HonkCSRF (not .IsPreview) }}
 <div class="info" id="refreshbox">
-<p><button class="refresh">refresh</button><span></span>
-<button class="scrolldown">scroll down</button>
+<p><button id="honkrefresher" class="refresh">refresh</button><span></span>
+<button id="newerscroller" class="scrolldown">scroll down</button>
 </div>
 {{ end }}
 <div id="honksonpage">

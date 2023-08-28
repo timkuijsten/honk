@@ -36,6 +36,8 @@ import (
 	"humungus.tedunangst.com/r/webs/mz"
 )
 
+var honkwindow time.Duration = 7
+
 //go:embed schema.sql
 var sqlSchema string
 
@@ -187,7 +189,7 @@ func getbonk(userid int64, xid string) *Honk {
 }
 
 func getpublichonks() []*Honk {
-	dt := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(dbtimeformat)
+	dt := time.Now().Add(-honkwindow).UTC().Format(dbtimeformat)
 	rows, err := stmtPublicHonks.Query(dt, 100)
 	return getsomehonks(rows, err)
 }
@@ -223,7 +225,7 @@ func geteventhonks(userid int64) []*Honk {
 	return honks
 }
 func gethonksbyuser(name string, includeprivate bool, wanted int64) []*Honk {
-	dt := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(dbtimeformat)
+	dt := time.Now().Add(-honkwindow).UTC().Format(dbtimeformat)
 	limit := 50
 	whofore := 2
 	if includeprivate {
@@ -233,18 +235,18 @@ func gethonksbyuser(name string, includeprivate bool, wanted int64) []*Honk {
 	return getsomehonks(rows, err)
 }
 func gethonksforuser(userid int64, wanted int64) []*Honk {
-	dt := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(dbtimeformat)
+	dt := time.Now().Add(-honkwindow).UTC().Format(dbtimeformat)
 	rows, err := stmtHonksForUser.Query(wanted, userid, dt, userid, userid)
 	return getsomehonks(rows, err)
 }
 func gethonksforuserfirstclass(userid int64, wanted int64) []*Honk {
-	dt := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(dbtimeformat)
+	dt := time.Now().Add(-honkwindow).UTC().Format(dbtimeformat)
 	rows, err := stmtHonksForUserFirstClass.Query(wanted, userid, dt, userid, userid)
 	return getsomehonks(rows, err)
 }
 
 func gethonksforme(userid int64, wanted int64) []*Honk {
-	dt := time.Now().Add(-7 * 24 * time.Hour).UTC().Format(dbtimeformat)
+	dt := time.Now().Add(-honkwindow).UTC().Format(dbtimeformat)
 	rows, err := stmtHonksForMe.Query(wanted, userid, dt, userid, 250)
 	return getsomehonks(rows, err)
 }
@@ -790,9 +792,19 @@ func loadchatter(userid int64) []*Chatter {
 }
 
 func (honk *Honk) Plain() string {
+	return honktoplain(honk, false)
+}
+
+func (honk *Honk) VeryPlain() string {
+	return honktoplain(honk, true)
+}
+
+func honktoplain(honk *Honk, very bool) string {
 	var plain []string
 	var filt htfilter.Filter
-	filt.WithLinks = true
+	if !very {
+		filt.WithLinks = true
+	}
 	if honk.Precis != "" {
 		t, _ := filt.TextOnly(honk.Precis)
 		plain = append(plain, t)

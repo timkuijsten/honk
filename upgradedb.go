@@ -172,6 +172,7 @@ func upgradedb() {
 		tx = nil
 		fallthrough
 	case 45:
+		try("analyze")
 
 	default:
 		elog.Fatalf("can't upgrade unknown version %d", dbversion)

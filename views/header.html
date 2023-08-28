@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
 <head>
-<title>honk</title>
+<title>{{ or .Title .ServerName }}</title>
 <link href="/style.css{{ .StyleParam }}" rel="stylesheet">
 {{ if .LocalStyleParam }}
 <link href="/local.css{{ .LocalStyleParam }}" rel="stylesheet">
@@ -52,7 +52,7 @@
 <li><a href="/help/honk.1.html">help</a>
 <li>
 <form action="/q" method="GET">
-<input type="text" name="q" autocomplete=off size=10 placeholder="search">
+<input type="text" name="q" autocomplete=off size=10 id="searchbox" placeholder="search">
 </form>
 </ul>
 </details>
