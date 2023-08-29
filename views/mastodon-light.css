@@ -45,6 +45,7 @@ main {
 	border: 1px solid var(--hl);
 	border-bottom: none;
 	font-size: 1.2em;
+	max-width: 600px;
 }
 
 .honk, .info {
@@ -128,7 +129,6 @@ textarea#honknoise {
 
 .skinny main {
 	padding: 0;
-	max-width: 600px;
 }
 
 .honk header a, .honk header {
