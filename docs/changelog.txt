@@ -2,6 +2,18 @@ changelog
 
 ### next
 
++ Finally fix slow public queries.
+
+### 1.1.1 Required Refinement
+
++ Fix help file stylesheet link.
+
+### 1.1.0 Eventual Enshittification
+
++ Fix backup command.
+
++ Fixes for markdown.
+
 + Allow bigger image uploads.
 
 + Some hotkeys for the web UI.

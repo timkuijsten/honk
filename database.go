@@ -307,11 +307,11 @@ func gethonksbysearch(userid int64, q string, wanted int64) []*Honk {
 			continue
 		}
 		if t == "@me" {
-			queries = append(queries, "whofore = 1")
+			queries = append(queries, negate+"whofore = 1")
 			continue
 		}
 		if t == "@self" {
-			queries = append(queries, "(whofore = 2 or whofore = 3)")
+			queries = append(queries, negate+"(whofore = 2 or whofore = 3)")
 			continue
 		}
 		if strings.HasPrefix(t, "before:") {

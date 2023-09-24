@@ -65,7 +65,7 @@ func reexecArgs(cmd string) []string {
 var elog, ilog, dlog *golog.Logger
 
 func errx(msg string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, msg, args...)
+	fmt.Fprintf(os.Stderr, msg+"\n", args...)
 	os.Exit(1)
 }
 
@@ -115,12 +115,16 @@ func main() {
 	getconfig("usersep", &userSep)
 	getconfig("honksep", &honkSep)
 	getconfig("devel", &develMode)
+	if develMode {
+		gogglesDoNothing()
+	}
 	getconfig("fasttimeout", &fastTimeout)
 	getconfig("slowtimeout", &slowTimeout)
 	getconfig("honkwindow", &honkwindow)
 	honkwindow *= 24 * time.Hour
-	getconfig("signgets", &signGets)
+
 	prepareStatements(db)
+
 	switch cmd {
 	case "admin":
 		adminscreen()
@@ -160,55 +164,55 @@ func main() {
 		adduser()
 	case "deluser":
 		if len(args) < 2 {
-			errx("usage: honk deluser username\n")
+			errx("usage: honk deluser username")
 		}
 		deluser(args[1])
 	case "chpass":
 		if len(args) < 2 {
-			errx("usage: honk chpass username\n")
+			errx("usage: honk chpass username")
 		}
 		chpass(args[1])
 	case "follow":
 		if len(args) < 3 {
-			errx("usage: honk follow username url\n")
+			errx("usage: honk follow username url")
 		}
 		user, err := butwhatabout(args[1])
 		if err != nil {
-			errx("user %s not found\n", args[1])
+			errx("user %s not found", args[1])
 		}
 		var meta HonkerMeta
 		mj, _ := jsonify(&meta)
 		honkerid, err := savehonker(user, args[2], "", "presub", "", mj)
 		if err != nil {
-			errx("had some trouble with that: %s\n", err)
+			errx("had some trouble with that: %s", err)
 		}
 		followyou(user, honkerid, true)
 	case "unfollow":
 		if len(args) < 3 {
-			errx("usage: honk unfollow username url\n")
+			errx("usage: honk unfollow username url")
 		}
 		user, err := butwhatabout(args[1])
 		if err != nil {
-			errx("user not found\n")
+			errx("user not found")
 		}
 		row := db.QueryRow("select honkerid from honkers where xid = ? and userid = ? and flavor in ('sub')", args[2], user.ID)
 		var honkerid int64
 		err = row.Scan(&honkerid)
 		if err != nil {
-			errx("sorry couldn't find them\n")
+			errx("sorry couldn't find them")
 		}
 		unfollowyou(user, honkerid, true)
 	case "sendmsg":
 		if len(args) < 4 {
-			errx("usage: honk send username filename rcpt\n")
+			errx("usage: honk send username filename rcpt")
 		}
 		user, err := butwhatabout(args[1])
 		if err != nil {
-			errx("user %s not found\n", args[1])
+			errx("user %s not found", args[1])
 		}
 		data, err := os.ReadFile(args[2])
 		if err != nil {
-			errx("can't read file: %s\n", err)
+			errx("can't read file: %s", err)
 		}
 		deliverate(user.ID, args[3], data)
 	case "cleanup":
@@ -219,19 +223,19 @@ func main() {
 		cleanupdb(arg)
 	case "unplug":
 		if len(args) < 2 {
-			errx("usage: honk unplug servername\n")
+			errx("usage: honk unplug servername")
 		}
 		name := args[1]
 		unplugserver(name)
 	case "backup":
 		if len(args) < 2 {
-			errx("usage: honk backup dirname\n")
+			errx("usage: honk backup dirname")
 		}
 		name := args[1]
 		svalbard(name)
 	case "ping":
 		if len(args) < 3 {
-			errx("usage: honk ping (from username) (to username or url)\n")
+			errx("usage: honk ping (from username) (to username or url)")
 		}
 		name := args[1]
 		targ := args[2]

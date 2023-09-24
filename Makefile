@@ -9,7 +9,7 @@ honk: .preflightcheck schema.sql *.go go.mod
 
 help:
 	for m in docs/*.[13578] ; do \
-	mandoc -T html -O fragment,man=%N.%S.html $$m | sed -E 's/<a class="Lk" href="([[:alnum:]._-]*)">/<img src="\1"><br>/g' > $$m.html ; \
+	mandoc -T html -O style=mandoc.css,man=%N.%S.html $$m | sed -E 's/<a class="Lk" href="([[:alnum:]._-]*)">/<img src="\1"><br>/g' > $$m.html ; \
 	done
 
 clean:

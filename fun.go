@@ -330,6 +330,7 @@ func precipitate(honk *Honk) {
 			noise = noise[idx+1:]
 		}
 		var marker mz.Marker
+		marker.Short = true
 		honk.Precis = marker.Mark(strings.TrimSpace(honk.Precis))
 		honk.Noise = noise
 	}

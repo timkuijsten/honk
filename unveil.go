@@ -1,5 +1,4 @@
 //go:build openbsd
-// +build openbsd
 
 //
 // Copyright (c) 2019 Ted Unangst <tedu@tedunangst.com>

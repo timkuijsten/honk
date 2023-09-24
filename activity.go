@@ -59,12 +59,14 @@ func friendorfoe(ct string) bool {
 	return false
 }
 
-var develClient = &http.Client{
-	Transport: &http.Transport{
+var honkClient = http.Client{}
+
+func gogglesDoNothing() {
+	honkClient.Transport = &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
-	},
+	}
 }
 
 func PostJunk(keyname string, key httpsig.PrivateKey, url string, j junk.Junk) error {
@@ -72,10 +74,6 @@ func PostJunk(keyname string, key httpsig.PrivateKey, url string, j junk.Junk) e
 }
 
 func PostMsg(keyname string, key httpsig.PrivateKey, url string, msg []byte) error {
-	client := http.DefaultClient
-	if develMode {
-		client = develClient
-	}
 	req, err := http.NewRequest("POST", url, bytes.NewReader(msg))
 	if err != nil {
 		return err
@@ -86,7 +84,7 @@ func PostMsg(keyname string, key httpsig.PrivateKey, url string, msg []byte) err
 	ctx, cancel := context.WithTimeout(context.Background(), 2*slowTimeout*time.Second)
 	defer cancel()
 	req = req.WithContext(ctx)
-	resp, err := client.Do(req)
+	resp, err := honkClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -130,13 +128,10 @@ func GetJunkHardMode(userid int64, url string) (junk.Junk, error) {
 
 var flightdeck = gate.NewSerializer()
 
-var signGets = true
-
 func GetJunkTimeout(userid int64, url string, timeout time.Duration) (junk.Junk, error) {
 	if rejectorigin(userid, url, false) {
 		return nil, fmt.Errorf("rejected origin: %s", url)
 	}
-	client := http.DefaultClient
 	sign := func(req *http.Request) error {
 		var ki *KeyInfo
 		ok := ziggies.Get(userid, &ki)
@@ -146,8 +141,17 @@ func GetJunkTimeout(userid int64, url string, timeout time.Duration) (junk.Junk,
 		return nil
 	}
 	if develMode {
-		client = develClient
 		sign = nil
+	}
+	client := honkClient
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return fmt.Errorf("stopped after 5 redirects")
+		}
+		if sign != nil {
+			sign(req)
+		}
+		return nil
 	}
 	fn := func() (interface{}, error) {
 		at := theonetruename
@@ -158,7 +162,7 @@ func GetJunkTimeout(userid int64, url string, timeout time.Duration) (junk.Junk,
 			Accept:  at,
 			Agent:   "honksnonk/5.0; " + serverName,
 			Timeout: timeout,
-			Client:  client,
+			Client:  &client,
 			Fixup:   sign,
 		})
 		return j, err
@@ -173,10 +177,6 @@ func GetJunkTimeout(userid int64, url string, timeout time.Duration) (junk.Junk,
 }
 
 func fetchsome(url string) ([]byte, error) {
-	client := http.DefaultClient
-	if develMode {
-		client = develClient
-	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		ilog.Printf("error fetching %s: %s", url, err)
@@ -186,7 +186,7 @@ func fetchsome(url string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	req = req.WithContext(ctx)
-	resp, err := client.Do(req)
+	resp, err := honkClient.Do(req)
 	if err != nil {
 		ilog.Printf("error fetching %s: %s", url, err)
 		return nil, err

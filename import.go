@@ -51,6 +51,10 @@ type ActivityObject struct {
 	AttributedTo string
 	Summary      string
 	Content      string
+	Source       struct {
+		MediaType string
+		Content   string
+	}
 	InReplyTo    string
 	Conversation string
 	Context      string
@@ -173,6 +177,12 @@ func importActivities(user *WhatAbout, filename, source string) {
 				audience = append(audience, t.(string))
 			}
 		}
+		content := toot.Object.Content
+		format := "html"
+		if toot.Object.Source.MediaType == "text/markdown" {
+			content = toot.Object.Source.Content
+			format = "markdown"
+		}
 		audience = append(audience, toot.Cc...)
 		honk := Honk{
 			UserID:   user.ID,
@@ -183,10 +193,10 @@ func importActivities(user *WhatAbout, filename, source string) {
 			Date:     toot.Object.Published,
 			URL:      xid,
 			Audience: audience,
-			Noise:    toot.Object.Content,
+			Noise:    content,
 			Convoy:   convoy,
 			Whofore:  2,
-			Format:   "html",
+			Format:   format,
 			Precis:   toot.Object.Summary,
 		}
 		if !loudandproud(honk.Audience) {
@@ -198,7 +208,7 @@ func importActivities(user *WhatAbout, filename, source string) {
 				fname := fmt.Sprintf("%s/%s", source, att.Url)
 				data, err := ioutil.ReadFile(fname)
 				if err != nil {
-					elog.Printf("error reading media: %s", fname)
+					elog.Printf("error reading media for %s: %s", honk.XID, fname)
 					continue
 				}
 				u := xfiltrate()
@@ -569,7 +579,7 @@ func export(username, file string) {
 	{
 		w, err := zd.Create("outbox.json")
 		if err != nil {
-			elog.Fatal(err)
+			elog.Fatal("error creating outbox.json", err)
 		}
 		var jonks []junk.Junk
 		rows, err := stmtUserHonks.Query(0, 3, user.Name, "0", 1234567)
@@ -582,7 +592,10 @@ func export(username, file string) {
 			noise := honk.Noise
 			j, jo := jonkjonk(user, honk)
 			if honk.Format == "markdown" {
-				jo["source"] = noise
+				source := junk.New()
+				source["mediaType"] = "text/markdown"
+				source["content"] = noise
+				jo["source"] = source
 			}
 			jonks = append(jonks, j)
 		}
@@ -598,7 +611,7 @@ func export(username, file string) {
 	{
 		w, err := zd.Create("inbox.json")
 		if err != nil {
-			elog.Fatal(err)
+			elog.Fatal("error creating inbox.json", err)
 		}
 		var jonks []junk.Junk
 		rows, err := stmtHonksForMe.Query(0, user.ID, "0", user.ID, 1234567)
@@ -622,16 +635,21 @@ func export(username, file string) {
 	}
 	zd.Create("media/")
 	for donk := range donks {
+		if donk == "" {
+			continue
+		}
 		var media string
 		var data []byte
 		w, err := zd.Create("media/" + donk)
 		if err != nil {
-			elog.Fatal(err)
+			elog.Printf("error creating %s: %s", donk, err)
+			continue
 		}
 		row := stmtGetFileData.QueryRow(donk)
 		err = row.Scan(&media, &data)
 		if err != nil {
-			elog.Fatal(err)
+			elog.Printf("error scanning file %s: %s", donk, err)
+			continue
 		}
 		w.Write(data)
 	}

@@ -15,6 +15,8 @@ create index idx_honksxid on honks(xid);
 create index idx_honksconvoy on honks(convoy);
 create index idx_honkshonker on honks(honker);
 create index idx_honksoonker on honks(oonker);
+create index idx_honksforme on honks(whofore) where whofore = 1;
+create index idx_honkswhotwo on honks(whofore) where whofore = 2;
 create index idx_donkshonk on donks(honkid);
 create index idx_donkschonk on donks(chonkid);
 create index idx_honkerxid on honkers(xid);
