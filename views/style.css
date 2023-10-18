@@ -288,6 +288,8 @@ input[type=file] {
 
 .subtle .noise {
 		color: var(--fg-subtle);
+}
+.subtle details.noise {
 		font-size: 0.8em;
 }
 .subtle .noise a {

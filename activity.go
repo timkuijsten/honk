@@ -606,8 +606,8 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 			obj, ok = item.GetMap("object")
 			if ok {
 				// peek ahead some
-				what, ok := obj.GetString("type")
-				if ok && (what == "Create" || what == "Update") {
+				what := firstofmany(obj, "type")
+				if what == "Create" || what == "Update" {
 					if what == "Update" {
 						isUpdate = true
 					}
@@ -774,7 +774,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 
 		var mentions []Mention
 		if obj != nil {
-			ot, _ := obj.GetString("type")
+			ot := firstofmany(obj, "type")
 			url, _ = obj.GetString("url")
 			if dt2, ok := obj.GetString("published"); ok {
 				dt = dt2

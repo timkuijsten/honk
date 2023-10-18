@@ -2,6 +2,10 @@ changelog
 
 ### next
 
++ Fix handling of svg with bom fucks.
+
++ FastCGI listening.
+
 + Finally fix slow public queries.
 
 ### 1.1.1 Required Refinement

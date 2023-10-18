@@ -25,6 +25,7 @@ import (
 	notrand "math/rand"
 	"mime/multipart"
 	"net/http"
+	"net/http/fcgi"
 	"net/url"
 	"os"
 	"os/signal"
@@ -409,7 +410,7 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 	if crappola(j) {
 		return
 	}
-	what, _ := j.GetString("type")
+	what := firstofmany(j, "type")
 	obj, _ := j.GetString("object")
 	if what == "Like" || what == "Dislike" || (what == "EmojiReact" && originate(obj) != serverName) {
 		return
@@ -458,7 +459,7 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 	case "Update":
 		obj, ok := j.GetMap("object")
 		if ok {
-			what, _ := obj.GetString("type")
+			what := firstofmany(obj, "type")
 			switch what {
 			case "Service":
 				fallthrough
@@ -478,7 +479,7 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		what, _ := obj.GetString("type")
+		what := firstofmany(obj, "type")
 		switch what {
 		case "Follow":
 			unfollowme(user, who, who, j)
@@ -555,7 +556,7 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	re_ont := regexp.MustCompile("https://" + serverName + "/o/([\\pL[:digit:]]+)")
-	what, _ := j.GetString("type")
+	what := firstofmany(j, "type")
 	dlog.Printf("server got a %s", what)
 	switch what {
 	case "Follow":
@@ -578,7 +579,7 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 			ilog.Printf("unknown undo no object")
 			return
 		}
-		what, _ := obj.GetString("type")
+		what := firstofmany(obj, "type")
 		if what != "Follow" {
 			ilog.Printf("unknown undo: %s", what)
 			return
@@ -2754,6 +2755,8 @@ func getassetparam(file string) string {
 	return fmt.Sprintf("?v=%.8x", hasher.Sum(nil))
 }
 
+var usefcgi bool
+
 func serve() {
 	db := opendatabase()
 	login.Init(login.InitArgs{Db: db, Logger: ilog, Insecure: develMode, SameSiteStrict: !develMode})
@@ -2892,6 +2895,12 @@ func serve() {
 	loggedin.HandleFunc("/hydra", webhydra)
 	loggedin.HandleFunc("/emus", showemus)
 	loggedin.Handle("/submithonker", login.CSRFWrap("submithonker", http.HandlerFunc(websubmithonker)))
+
+	if usefcgi {
+		err = fcgi.Serve(listener, mux)
+	} else {
+		err = http.Serve(listener, mux)
+	}
 
 	err = http.Serve(listener, mux)
 	if err != nil {

@@ -38,6 +38,8 @@ Make sure to pass the Host header, if necessary (as for nginx).
 .Bd -literal -offset indent
 proxy_set_header Host $http_host;
 .Ed
+.Pp
+FastCGI can be used by prefixing the listen address with "fcgi:".
 .Ss Build
 Building
 .Nm

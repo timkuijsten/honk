@@ -61,18 +61,25 @@ func backendSockname() string {
 	return dataDir + "/backend.sock"
 }
 
+var bomFuck = []byte{0xef, 0xbb, 0xbf}
+
 func isSVG(data []byte) bool {
-	ct := http.DetectContentType(data)
-	if strings.HasPrefix(ct, "text/xml") {
-		return strings.Index(string(data), "<!DOCTYPE svg PUBLIC") != -1
+	if bytes.HasPrefix(data, bomFuck) {
+		data = data[3:]
 	}
-	if strings.HasPrefix(ct, "text/plain") {
-		return bytes.HasPrefix(data, []byte("<svg "))
+	ct := http.DetectContentType(data)
+	if strings.HasPrefix(ct, "text/xml") || strings.HasPrefix(ct, "text/plain") {
+		if bytes.HasPrefix(data, []byte("<svg ")) || bytes.HasPrefix(data, []byte("<!DOCTYPE svg PUBLIC")) {
+			return true
+		}
 	}
 	return ct == "image/svg+xml"
 }
 
 func imageFromSVG(data []byte) (*image.Image, error) {
+	if bytes.HasPrefix(data, bomFuck) {
+		data = data[3:]
+	}
 	if len(data) > 100000 {
 		return nil, errors.New("my svg is too big")
 	}

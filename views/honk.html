@@ -51,7 +51,7 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ end }}
 </header>
 <p>
-<details class="noise" {{ .Open }} >
+<details class="noise" {{ with .Open }}{{.}}{{end}}>
 <summary class="noise">{{ .HTPrecis }}<p></summary>
 <p>{{ .HTPrecis }}
 <p class="content">{{ .HTML }}

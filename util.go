@@ -58,6 +58,7 @@ var alreadyopendb *sql.DB
 var stmtConfig *sql.Stmt
 
 func initdb() {
+	blobdbname := dataDir + "/blob.db"
 	dbname := dataDir + "/honk.db"
 	_, err := os.Stat(dbname)
 	if err == nil {
@@ -70,6 +71,7 @@ func initdb() {
 	alreadyopendb = db
 	defer func() {
 		os.Remove(dbname)
+		os.Remove(blobdbname)
 		os.Exit(1)
 	}()
 	c := make(chan os.Signal, 1)
@@ -79,6 +81,7 @@ func initdb() {
 		C.termecho(1)
 		fmt.Printf("\n")
 		os.Remove(dbname)
+		os.Remove(blobdbname)
 		os.Exit(1)
 	}()
 
@@ -96,7 +99,7 @@ func initdb() {
 	}
 	r := bufio.NewReader(os.Stdin)
 
-	initblobdb()
+	initblobdb(blobdbname)
 
 	prepareStatements(db)
 
@@ -152,8 +155,7 @@ func initdb() {
 	os.Exit(0)
 }
 
-func initblobdb() {
-	blobdbname := dataDir + "/blob.db"
+func initblobdb(blobdbname string) {
 	_, err := os.Stat(blobdbname)
 	if err == nil {
 		elog.Fatalf("%s already exists", blobdbname)
@@ -428,6 +430,10 @@ func openListener() (net.Listener, error) {
 	err := getconfig("listenaddr", &listenAddr)
 	if err != nil {
 		return nil, err
+	}
+	if strings.HasPrefix(listenAddr, "fcgi:") {
+		listenAddr = listenAddr[5:]
+		usefcgi = true
 	}
 	if listenAddr == "" {
 		return nil, fmt.Errorf("must have listenaddr")
