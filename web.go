@@ -2423,7 +2423,13 @@ func servememe(w http.ResponseWriter, r *http.Request) {
 	meme := mux.Vars(r)["meme"]
 
 	w.Header().Set("Cache-Control", "max-age="+somedays())
-	http.ServeFile(w, r, dataDir+"/memes/"+meme)
+	_, err := os.Stat(dataDir + "/memes/" + meme)
+	if err == nil {
+		http.ServeFile(w, r, dataDir+"/memes/"+meme)
+	} else {
+		mux.Vars(r)["xid"] = meme
+		servefile(w, r)
+	}
 }
 
 func servefile(w http.ResponseWriter, r *http.Request) {

@@ -1,5 +1,3 @@
-//go:build openbsd
-
 //
 // Copyright (c) 2019 Ted Unangst <tedu@tedunangst.com>
 //
@@ -17,50 +15,39 @@
 
 package main
 
-/*
-#include <stdlib.h>
-#include <unistd.h>
-*/
-import "C"
-
 import (
-	"unsafe"
+	"humungus.tedunangst.com/r/pledge"
 )
-
-func Unveil(path string, perms string) {
-	cpath := C.CString(path)
-	defer C.free(unsafe.Pointer(cpath))
-	cperms := C.CString(perms)
-	defer C.free(unsafe.Pointer(cperms))
-
-	rv, err := C.unveil(cpath, cperms)
-	if rv != 0 {
-		elog.Fatalf("unveil(%s, %s) failure (%d)", path, perms, err)
-	}
-}
-
-func Pledge(promises string) {
-	cpromises := C.CString(promises)
-	defer C.free(unsafe.Pointer(cpromises))
-
-	rv, err := C.pledge(cpromises, nil)
-	if rv != 0 {
-		elog.Fatalf("pledge(%s) failure (%d)", promises, err)
-	}
-}
 
 func init() {
 	preservehooks = append(preservehooks, func() {
-		Unveil("/etc/ssl", "r")
-		if viewDir != dataDir {
-			Unveil(viewDir, "r")
+		err := pledge.Unveil("/etc/ssl", "r")
+		if err != nil {
+			elog.Fatalf("unveil(%s, %s) failure (%d)", "/etc/ssl", "r", err)
 		}
-		Unveil(dataDir, "rwc")
-		C.unveil(nil, nil)
-		Pledge("stdio rpath wpath cpath flock dns inet unix")
+		if viewDir != dataDir {
+			err = pledge.Unveil(viewDir, "r")
+			if err != nil {
+				elog.Fatalf("unveil(%s, %s) failure (%d)", viewDir, "r", err)
+			}
+		}
+		err = pledge.Unveil(dataDir, "rwc")
+		if err != nil {
+			elog.Fatalf("unveil(%s, %s) failure (%d)", dataDir, "rwc", err)
+		}
+		pledge.UnveilEnd()
+		promises := "stdio rpath wpath cpath flock dns inet unix"
+		err = pledge.Pledge(promises)
+		if err != nil {
+			elog.Fatalf("pledge(%s) failure (%d)", promises, err)
+		}
 	})
 	backendhooks = append(backendhooks, func() {
-		C.unveil(nil, nil)
-		Pledge("stdio unix")
+		pledge.UnveilEnd()
+		promises := "stdio unix"
+		err := pledge.Pledge(promises)
+		if err != nil {
+			elog.Fatalf("pledge(%s) failure (%d)", promises, err)
+		}
 	})
 }

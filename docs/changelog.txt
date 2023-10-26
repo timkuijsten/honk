@@ -2,6 +2,8 @@ changelog
 
 ### next
 
++ Reroute memes to donks in emergencies.
+
 + Fix handling of svg with bom fucks.
 
 + FastCGI listening.
