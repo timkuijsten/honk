@@ -23,7 +23,7 @@ import (
 	"humungus.tedunangst.com/r/webs/htfilter"
 )
 
-var myVersion = 47 // idx forme
+var myVersion = 48 // chat keys
 
 type dbexecer interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
@@ -47,15 +47,25 @@ func upgradedb() {
 	}
 	var err error
 	var tx *sql.Tx
-	try := func(s string, args ...interface{}) {
-		if tx != nil {
-			_, err = tx.Exec(s, args...)
+	try := func(s string, args ...interface{}) *sql.Rows {
+		var rows *sql.Rows
+		if strings.HasPrefix(s, "select") {
+			if tx != nil {
+				rows, err = tx.Query(s, args...)
+			} else {
+				rows, err = db.Query(s, args...)
+			}
 		} else {
-			_, err = db.Exec(s, args...)
+			if tx != nil {
+				_, err = tx.Exec(s, args...)
+			} else {
+				_, err = db.Exec(s, args...)
+			}
 		}
 		if err != nil {
 			elog.Fatalf("can't run %s: %s", s, err)
 		}
+		return rows
 	}
 	setV := func(ver int64) {
 		try("update config set value = ? where key = 'dbversion'", ver)
@@ -180,6 +190,32 @@ func upgradedb() {
 		setV(47)
 		fallthrough
 	case 47:
+		rows := try("select userid, options from users where userid > 0")
+		var users []*WhatAbout
+		for rows.Next() {
+			var user WhatAbout
+			var jopt string
+			err = rows.Scan(&user.ID, &jopt)
+			if err != nil {
+				elog.Fatal(err)
+			}
+			err = unjsonify(jopt, &user.Options)
+			if err != nil {
+				elog.Fatal(err)
+			}
+			users = append(users, &user)
+		}
+		rows.Close()
+		for _, user := range users {
+			chatpubkey, chatseckey := newChatKeys()
+			user.Options.ChatPubKey = tob64(chatpubkey.key[:])
+			user.Options.ChatSecKey = tob64(chatseckey.key[:])
+			jopt, _ := jsonify(user.Options)
+			try("update users set options = ? where userid = ?", jopt, user.ID)
+		}
+		setV(48)
+		fallthrough
+	case 48:
 		try("analyze")
 
 	default:

@@ -50,7 +50,10 @@ func ElaborateUnitTests() {
 
 func unplugserver(hostname string) {
 	db := opendatabase()
-	xid := fmt.Sprintf("%%https://%s/%%", hostname)
+	xid := fmt.Sprintf("https://%s", hostname)
+	db.Exec("delete from honkers where xid = ? and flavor = 'dub'", xid)
+	db.Exec("delete from doovers where rcpt = ?", xid)
+	xid += "/%"
 	db.Exec("delete from honkers where xid like ? and flavor = 'dub'", xid)
 	db.Exec("delete from doovers where rcpt like ?", xid)
 }

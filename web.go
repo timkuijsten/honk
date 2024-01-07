@@ -19,11 +19,13 @@ import (
 	"bytes"
 	"crypto/sha512"
 	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
 	notrand "math/rand"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/fcgi"
 	"net/url"
@@ -33,12 +35,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unicode/utf8"
 
 	"github.com/gorilla/mux"
-	"humungus.tedunangst.com/r/webs/cache"
+	"humungus.tedunangst.com/r/gonix"
 	"humungus.tedunangst.com/r/webs/gencache"
 	"humungus.tedunangst.com/r/webs/httpsig"
 	"humungus.tedunangst.com/r/webs/junk"
@@ -96,8 +99,7 @@ func getInfo(r *http.Request) map[string]interface{} {
 	if u := login.GetUserInfo(r); u != nil {
 		templinfo["UserInfo"], _ = butwhatabout(u.Username)
 		templinfo["UserStyle"] = getuserstyle(u)
-		var combos []string
-		combocache.Get(u.UserID, &combos)
+		combos, _ := combocache.Get(u.UserID)
 		templinfo["Combos"] = combos
 	}
 	return templinfo
@@ -334,8 +336,7 @@ func ping(user *WhatAbout, who string) {
 		ilog.Printf("nobody to ping!")
 		return
 	}
-	var box *Box
-	ok := boxofboxes.Get(who, &box)
+	box, ok := boxofboxes.Get(who)
 	if !ok {
 		ilog.Printf("no inbox to ping %s", who)
 		return
@@ -360,8 +361,7 @@ func ping(user *WhatAbout, who string) {
 }
 
 func pong(user *WhatAbout, who string, obj string) {
-	var box *Box
-	ok := boxofboxes.Get(who, &box)
+	box, ok := boxofboxes.Get(who)
 	if !ok {
 		ilog.Printf("no inbox to pong %s", who)
 		return
@@ -412,8 +412,17 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 	}
 	what := firstofmany(j, "type")
 	obj, _ := j.GetString("object")
-	if what == "Like" || what == "Dislike" || (what == "EmojiReact" && originate(obj) != serverName) {
+	switch what {
+	case "Like":
 		return
+	case "Dislike":
+		return
+	case "Listen":
+		return
+	case "EmojiReact":
+		if originate(obj) != serverName {
+			return
+		}
 	}
 	who, _ := j.GetString("actor")
 	if rejectactor(user.ID, who) {
@@ -430,7 +439,7 @@ func inbox(w http.ResponseWriter, r *http.Request) {
 		if keyname != "" {
 			ilog.Printf("bad signature from %s", keyname)
 		}
-		http.Error(w, "what did you call me?", http.StatusTeapot)
+		http.Error(w, "what did you call me?", http.StatusUnauthorized)
 		return
 	}
 	origin := keymatch(keyname, who)
@@ -543,7 +552,7 @@ func serverinbox(w http.ResponseWriter, r *http.Request) {
 		if keyname != "" {
 			ilog.Printf("bad signature from %s", keyname)
 		}
-		http.Error(w, "what did you call me?", http.StatusTeapot)
+		http.Error(w, "what did you call me?", http.StatusUnauthorized)
 		return
 	}
 	who, _ := j.GetString("actor")
@@ -675,7 +684,7 @@ func xzone(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var oldoutbox = cache.New(cache.Options{Filler: func(name string) ([]byte, bool) {
+var oldoutbox = gencache.New(gencache.Options[string, []byte]{Fill: func(name string) ([]byte, bool) {
 	user, err := butwhatabout(name)
 	if err != nil {
 		return nil, false
@@ -713,8 +722,7 @@ func outbox(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	var j []byte
-	ok := oldoutbox.Get(name, &j)
+	j, ok := oldoutbox.Get(name)
 	if ok {
 		w.Header().Set("Content-Type", theonetruename)
 		w.Write(j)
@@ -723,7 +731,7 @@ func outbox(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var oldempties = cache.New(cache.Options{Filler: func(url string) ([]byte, bool) {
+var oldempties = gencache.New(gencache.Options[string, []byte]{Fill: func(url string) ([]byte, bool) {
 	colname := "/followers"
 	if strings.HasSuffix(url, "/following") {
 		colname = "/following"
@@ -751,8 +759,7 @@ func emptiness(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	var j []byte
-	ok := oldempties.Get(r.URL.Path, &j)
+	j, ok := oldempties.Get(r.URL.Path)
 	if ok {
 		w.Header().Set("Content-Type", theonetruename)
 		w.Write(j)
@@ -792,6 +799,7 @@ func showuser(w http.ResponseWriter, r *http.Request) {
 	templinfo["PageName"] = "user"
 	templinfo["PageArg"] = name
 	templinfo["Name"] = user.Name
+	templinfo["Honkology"] = oguser(user)
 	templinfo["WhatAbout"] = user.HTAbout
 	templinfo["ServerMessage"] = ""
 	templinfo["APAltLink"] = templates.Sprintf("<link href='%s' rel='alternate' type='application/activity+json'>", user.URL)
@@ -1070,16 +1078,17 @@ func tracker() {
 
 var re_keyholder = regexp.MustCompile(`keyId="([^"]+)"`)
 
-func trackback(xid string, r *http.Request) {
-	agent := r.UserAgent()
-	who := originate(agent)
-	sig := r.Header.Get("Signature")
-	if sig != "" {
-		m := re_keyholder.FindStringSubmatch(sig)
-		if len(m) == 2 {
-			who = m[1]
+func requestActor(r *http.Request) string {
+	if sig := r.Header.Get("Signature"); sig != "" {
+		if m := re_keyholder.FindStringSubmatch(sig); len(m) == 2 {
+			return m[1]
 		}
 	}
+	return ""
+}
+
+func trackback(xid string, r *http.Request) {
+	who := requestActor(r)
 	if who != "" {
 		trackchan <- Track{xid: xid, who: who}
 	}
@@ -1164,9 +1173,24 @@ func threadsort(honks []*Honk) []*Honk {
 	return thread
 }
 
+func oguser(user *WhatAbout) template.HTML {
+	short := user.About
+	if len(short) > 160 {
+		short = short[0:160] + "..."
+	}
+	title := user.Display
+	imgurl := avatarURL(user)
+	return templates.Sprintf(
+		`<meta property="og:title" content="%s" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="%s" />
+<meta property="og:image" content="%s" />
+<meta property="og:description" content="%s" />`,
+		title, user.URL, imgurl, short)
+}
+
 func honkology(honk *Honk) template.HTML {
-	var user *WhatAbout
-	ok := somenumberedusers.Get(honk.UserID, &user)
+	user, ok := somenumberedusers.Get(honk.UserID)
 	if !ok {
 		return ""
 	}
@@ -1298,31 +1322,11 @@ func saveuser(w http.ResponseWriter, r *http.Request) {
 	db := opendatabase()
 
 	options := user.Options
-	if r.FormValue("skinny") == "skinny" {
-		options.SkinnyCSS = true
-	} else {
-		options.SkinnyCSS = false
-	}
-	if r.FormValue("omitimages") == "omitimages" {
-		options.OmitImages = true
-	} else {
-		options.OmitImages = false
-	}
-	if r.FormValue("mentionall") == "mentionall" {
-		options.MentionAll = true
-	} else {
-		options.MentionAll = false
-	}
-	if r.FormValue("inlineqts") == "inlineqts" {
-		options.InlineQuotes = true
-	} else {
-		options.InlineQuotes = false
-	}
-	if r.FormValue("maps") == "apple" {
-		options.MapLink = "apple"
-	} else {
-		options.MapLink = ""
-	}
+	options.SkinnyCSS = r.FormValue("skinny") == "skinny"
+	options.OmitImages = r.FormValue("omitimages") == "omitimages"
+	options.MentionAll = r.FormValue("mentionall") == "mentionall"
+	options.InlineQuotes = r.FormValue("inlineqts") == "inlineqts"
+	options.MapLink = r.FormValue("maps")
 	options.Reaction = r.FormValue("reaction")
 
 	sendupdate := false
@@ -1827,7 +1831,6 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 		})
 	}
 	noise = quickrename(noise, userinfo.UserID)
-	noise = hooterize(noise)
 	honk.Noise = noise
 	precipitate(honk)
 	noise = honk.Noise
@@ -1860,7 +1863,7 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 	} else if updatexid == "" {
 		honk.Audience = []string{thewholeworld}
 	}
-	if honk.Noise != "" && honk.Noise[0] == '@' {
+	if noise != "" && noise[0] == '@' {
 		honk.Audience = append(grapevine(honk.Mentions), honk.Audience...)
 	} else {
 		honk.Audience = append(honk.Audience, grapevine(honk.Mentions)...)
@@ -2085,7 +2088,7 @@ func submitchonk(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/chatter", http.StatusSeeOther)
 }
 
-var combocache = cache.New(cache.Options{Filler: func(userid int64) ([]string, bool) {
+var combocache = gencache.New(gencache.Options[int64, []string]{Fill: func(userid int64) ([]string, bool) {
 	honkers := gethonkers(userid)
 	var combos []string
 	for _, h := range honkers {
@@ -2102,9 +2105,6 @@ var combocache = cache.New(cache.Options{Filler: func(userid int64) ([]string, b
 }, Invalidator: &honkerinvalidator})
 
 func showcombos(w http.ResponseWriter, r *http.Request) {
-	userinfo := login.GetUserInfo(r)
-	var combos []string
-	combocache.Get(userinfo.UserID, &combos)
 	templinfo := getInfo(r)
 	err := readviews.Execute(w, "combos.html", templinfo)
 	if err != nil {
@@ -2204,58 +2204,6 @@ func hfcspage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func savehfcs(w http.ResponseWriter, r *http.Request) {
-	userinfo := login.GetUserInfo(r)
-	itsok := r.FormValue("itsok")
-	if itsok == "iforgiveyou" {
-		hfcsid, _ := strconv.ParseInt(r.FormValue("hfcsid"), 10, 0)
-		_, err := stmtDeleteFilter.Exec(userinfo.UserID, hfcsid)
-		if err != nil {
-			elog.Printf("error deleting filter: %s", err)
-		}
-		filtInvalidator.Clear(userinfo.UserID)
-		http.Redirect(w, r, "/hfcs", http.StatusSeeOther)
-		return
-	}
-
-	filt := new(Filter)
-	filt.Name = strings.TrimSpace(r.FormValue("name"))
-	filt.Date = time.Now().UTC()
-	filt.Actor = strings.TrimSpace(r.FormValue("actor"))
-	filt.IncludeAudience = r.FormValue("incaud") == "yes"
-	filt.Text = strings.TrimSpace(r.FormValue("filttext"))
-	filt.IsReply = r.FormValue("isreply") == "yes"
-	filt.IsAnnounce = r.FormValue("isannounce") == "yes"
-	filt.AnnounceOf = strings.TrimSpace(r.FormValue("announceof"))
-	filt.Reject = r.FormValue("doreject") == "yes"
-	filt.SkipMedia = r.FormValue("doskipmedia") == "yes"
-	filt.Hide = r.FormValue("dohide") == "yes"
-	filt.Collapse = r.FormValue("docollapse") == "yes"
-	filt.Rewrite = strings.TrimSpace(r.FormValue("filtrewrite"))
-	filt.Replace = strings.TrimSpace(r.FormValue("filtreplace"))
-	if dur := parseDuration(r.FormValue("filtduration")); dur > 0 {
-		filt.Expiration = time.Now().UTC().Add(dur)
-	}
-	filt.Notes = strings.TrimSpace(r.FormValue("filtnotes"))
-
-	if filt.Actor == "" && filt.Text == "" && !filt.IsAnnounce {
-		ilog.Printf("blank filter")
-		http.Error(w, "can't save a blank filter", http.StatusInternalServerError)
-		return
-	}
-
-	j, err := jsonify(filt)
-	if err == nil {
-		_, err = stmtSaveFilter.Exec(userinfo.UserID, j)
-	}
-	if err != nil {
-		elog.Printf("error saving filter: %s", err)
-	}
-
-	filtInvalidator.Clear(userinfo.UserID)
-	http.Redirect(w, r, "/hfcs", http.StatusSeeOther)
-}
-
 func accountpage(w http.ResponseWriter, r *http.Request) {
 	u := login.GetUserInfo(r)
 	user, _ := butwhatabout(u.Username)
@@ -2285,7 +2233,7 @@ func dochpass(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/account", http.StatusSeeOther)
 }
 
-var oldfingers = cache.New(cache.Options{Filler: func(orig string) ([]byte, bool) {
+var oldfingers = gencache.New(gencache.Options[string, []byte]{Fill: func(orig string) ([]byte, bool) {
 	if strings.HasPrefix(orig, "acct:") {
 		orig = orig[5:]
 	}
@@ -2328,8 +2276,7 @@ func fingerlicker(w http.ResponseWriter, r *http.Request) {
 
 	dlog.Printf("finger lick: %s", orig)
 
-	var j []byte
-	ok := oldfingers.Get(orig, &j)
+	j, ok := oldfingers.Get(orig)
 	if ok {
 		w.Header().Set("Content-Type", "application/jrd+json")
 		w.Write(j)
@@ -2679,24 +2626,31 @@ func fiveoh(w http.ResponseWriter, r *http.Request) {
 var endoftheworld = make(chan bool)
 var readyalready = make(chan bool)
 var workinprogress = 0
+var requestWG sync.WaitGroup
+var listenSocket net.Listener
 
 func enditall() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-sig
 	ilog.Printf("stopping...")
+	listenSocket.Close()
 	for i := 0; i < workinprogress; i++ {
 		endoftheworld <- true
 	}
 	ilog.Printf("waiting...")
+	go func() {
+		time.Sleep(10 * time.Second)
+		elog.Printf("timed out waiting for requests to finish")
+		os.Exit(0)
+	}()
 	for i := 0; i < workinprogress; i++ {
 		<-readyalready
 	}
+	requestWG.Wait()
 	ilog.Printf("apocalypse")
 	os.Exit(0)
 }
-
-var preservehooks []func()
 
 func bgmonitor() {
 	for {
@@ -2712,6 +2666,8 @@ func bgmonitor() {
 
 func addcspheaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestWG.Add(1)
+		defer requestWG.Done()
 		policy := "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'"
 		if develMode {
 			policy += "; report-uri /csp-violation"
@@ -2761,6 +2717,30 @@ func getassetparam(file string) string {
 	return fmt.Sprintf("?v=%.8x", hasher.Sum(nil))
 }
 
+func startWatcher() {
+	watcher, err := gonix.NewWatcher()
+	if err != nil {
+		return
+	}
+	go func() {
+		s := dataDir + "/views/local.css"
+		for {
+			err := watcher.WatchFile(s)
+			if err != nil {
+				break
+			}
+			err = watcher.WaitForChange()
+			if err != nil {
+				dlog.Printf("can't wait: %s", err)
+				break
+			}
+			dlog.Printf("local.css changed")
+			delete(savedassetparams, s)
+			savedassetparams[s] = getassetparam(s)
+		}
+	}()
+}
+
 var usefcgi bool
 
 func serve() {
@@ -2780,26 +2760,16 @@ func serve() {
 	loadLingo()
 	emuinit()
 
-	readviews = templates.Load(develMode,
-		viewDir+"/views/honkpage.html",
-		viewDir+"/views/honkfrags.html",
-		viewDir+"/views/honkers.html",
-		viewDir+"/views/chatter.html",
-		viewDir+"/views/hfcs.html",
-		viewDir+"/views/combos.html",
-		viewDir+"/views/honkform.html",
-		viewDir+"/views/honk.html",
-		viewDir+"/views/account.html",
-		viewDir+"/views/about.html",
-		viewDir+"/views/funzone.html",
-		viewDir+"/views/login.html",
-		viewDir+"/views/xzone.html",
-		viewDir+"/views/msg.html",
-		viewDir+"/views/header.html",
-		viewDir+"/views/onts.html",
-		viewDir+"/views/emus.html",
-		viewDir+"/views/honkpage.js",
-	)
+	var toload []string
+	dents, _ := os.ReadDir(viewDir + "/views")
+	for _, dent := range dents {
+		name := dent.Name()
+		if strings.HasSuffix(name, ".html") {
+			toload = append(toload, viewDir+"/views/"+name)
+		}
+	}
+
+	readviews = templates.Load(develMode, toload...)
 	if !develMode {
 		assets := []string{
 			viewDir + "/views/style.css",
@@ -2813,10 +2783,9 @@ func serve() {
 		}
 		loadAvatarColors()
 	}
+	startWatcher()
 
-	for _, h := range preservehooks {
-		h()
-	}
+	securitizeweb()
 
 	mux := mux.NewRouter()
 	mux.Use(addcspheaders)
@@ -2907,9 +2876,9 @@ func serve() {
 	} else {
 		err = http.Serve(listener, mux)
 	}
-
-	err = http.Serve(listener, mux)
-	if err != nil {
-		elog.Fatal(err)
+	if err != nil && !errors.Is(err, net.ErrClosed) {
+		elog.Printf("serve error: %s", err)
 	}
+	time.Sleep(15 * time.Second)
+	elog.Printf("fell off the bottom")
 }

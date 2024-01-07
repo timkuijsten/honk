@@ -6,6 +6,15 @@ html {
 	--fg-subtle: #a9c;
 	--fg-limited: #a79;
 }
+@media (prefers-color-scheme: dark) {
+.noise img:not(.emu) {
+	opacity: .5;
+	transition: opacity .5s ease-in-out;
+}
+.noise img:not(.emu):hover {
+	opacity: 1;
+}
+}
 
 body {
 	background: var(--bg-page);

@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
-	"humungus.tedunangst.com/r/webs/cache"
+	"humungus.tedunangst.com/r/webs/gencache"
 	"humungus.tedunangst.com/r/webs/htfilter"
 	"humungus.tedunangst.com/r/webs/httpsig"
 	"humungus.tedunangst.com/r/webs/mz"
@@ -62,8 +62,7 @@ func loadLingo() {
 }
 
 func reverbolate(userid int64, honks []*Honk) {
-	var user *WhatAbout
-	somenumberedusers.Get(userid, &user)
+	user, _ := somenumberedusers.Get(userid)
 	for _, h := range honks {
 		h.What += "ed"
 		if h.What == "honked" && h.RID != "" {
@@ -163,9 +162,8 @@ func reverbolate(userid int64, honks []*Honk) {
 					}
 				}
 				if local && h.What != "bonked" {
-					var emu Emu
-					emucache.Get(e, &emu)
-					if emu.ID != "" {
+					emu, _ := emucache.Get(e)
+					if emu != nil {
 						return fmt.Sprintf(`<img class="emu" title="%s" src="%s">`, emu.Name, emu.ID)
 					}
 				}
@@ -266,9 +264,8 @@ func filterchonk(ch *Chonk) {
 			}
 		}
 		if local {
-			var emu Emu
-			emucache.Get(e, &emu)
-			if emu.ID != "" {
+			emu, _ := emucache.Get(e)
+			if emu != nil {
 				return fmt.Sprintf(`<img class="emu" title="%s" src="%s">`, emu.Name, emu.ID)
 			}
 		}
@@ -425,7 +422,7 @@ type Emu struct {
 
 var re_emus = regexp.MustCompile(`:[[:alnum:]_-]+:`)
 
-var emucache = cache.New(cache.Options{Filler: func(ename string) (Emu, bool) {
+var emucache = gencache.New(gencache.Options[string, *Emu]{Fill: func(ename string) (*Emu, bool) {
 	fname := ename[1 : len(ename)-1]
 	exts := []string{".png", ".gif"}
 	for _, ext := range exts {
@@ -437,19 +434,18 @@ var emucache = cache.New(cache.Options{Filler: func(ename string) (Emu, bool) {
 		if develMode {
 			url = fmt.Sprintf("/emu/%s%s", fname, ext)
 		}
-		return Emu{ID: url, Name: ename, Type: "image/" + ext[1:]}, true
+		return &Emu{ID: url, Name: ename, Type: "image/" + ext[1:]}, true
 	}
-	return Emu{Name: ename, ID: "", Type: "image/png"}, true
+	return nil, true
 }, Duration: 10 * time.Second})
 
-func herdofemus(noise string) []Emu {
+func herdofemus(noise string) []*Emu {
 	m := re_emus.FindAllString(noise, -1)
 	m = oneofakind(m)
-	var emus []Emu
+	var emus []*Emu
 	for _, e := range m {
-		var emu Emu
-		emucache.Get(e, &emu)
-		if emu.ID == "" {
+		emu, _ := emucache.Get(e)
+		if emu == nil {
 			continue
 		}
 		emus = append(emus, emu)
@@ -554,7 +550,7 @@ func quickrename(s string, userid int64) string {
 	return s
 }
 
-var shortnames = cache.New(cache.Options{Filler: func(userid int64) (map[string]string, bool) {
+var shortnames = gencache.New(gencache.Options[int64, map[string]string]{Fill: func(userid int64) (map[string]string, bool) {
 	honkers := gethonkers(userid)
 	m := make(map[string]string)
 	for _, h := range honkers {
@@ -564,15 +560,14 @@ var shortnames = cache.New(cache.Options{Filler: func(userid int64) (map[string]
 }, Invalidator: &honkerinvalidator})
 
 func shortname(userid int64, xid string) string {
-	var m map[string]string
-	ok := shortnames.Get(userid, &m)
+	m, ok := shortnames.Get(userid)
 	if ok {
 		return m[xid]
 	}
 	return ""
 }
 
-var fullnames = cache.New(cache.Options{Filler: func(userid int64) (map[string]string, bool) {
+var fullnames = gencache.New(gencache.Options[int64, map[string]string]{Fill: func(userid int64) (map[string]string, bool) {
 	honkers := gethonkers(userid)
 	m := make(map[string]string)
 	for _, h := range honkers {
@@ -582,8 +577,7 @@ var fullnames = cache.New(cache.Options{Filler: func(userid int64) (map[string]s
 }, Invalidator: &honkerinvalidator})
 
 func fullname(name string, userid int64) string {
-	var m map[string]string
-	ok := fullnames.Get(userid, &m)
+	m, ok := fullnames.Get(userid)
 	if ok {
 		return m[name]
 	}
@@ -616,7 +610,7 @@ func originate(u string) string {
 	return ""
 }
 
-var allhandles = cache.New(cache.Options{Filler: func(xid string) (string, bool) {
+var allhandles = gencache.New(gencache.Options[string, string]{Fill: func(xid string) (string, bool) {
 	handle := getxonker(xid, "handle")
 	if handle == "" {
 		dlog.Printf("need to get a handle: %s", xid)
@@ -640,8 +634,7 @@ func handles(xid string) (string, string) {
 	if xid == "" || xid == thewholeworld || strings.HasSuffix(xid, "/followers") {
 		return "", ""
 	}
-	var handle string
-	allhandles.Get(xid, &handle)
+	handle, _ := allhandles.Get(xid)
 	if handle == xid {
 		return xid, xid
 	}
@@ -683,9 +676,8 @@ func oneofakind(a []string) []string {
 	return a[:j]
 }
 
-var ziggies = cache.New(cache.Options{Filler: func(userid int64) (*KeyInfo, bool) {
-	var user *WhatAbout
-	ok := somenumberedusers.Get(userid, &user)
+var ziggies = gencache.New(gencache.Options[int64, *KeyInfo]{Fill: func(userid int64) (*KeyInfo, bool) {
+	user, ok := somenumberedusers.Get(userid)
 	if !ok {
 		return nil, false
 	}
@@ -696,12 +688,11 @@ var ziggies = cache.New(cache.Options{Filler: func(userid int64) (*KeyInfo, bool
 }})
 
 func ziggy(userid int64) *KeyInfo {
-	var ki *KeyInfo
-	ziggies.Get(userid, &ki)
+	ki, _ := ziggies.Get(userid)
 	return ki
 }
 
-var zaggies = cache.New(cache.Options{Filler: func(keyname string) (httpsig.PublicKey, bool) {
+var zaggies = gencache.New(gencache.Options[string, httpsig.PublicKey]{Fill: func(keyname string) (httpsig.PublicKey, bool) {
 	data := getxonker(keyname, "pubkey")
 	if data == "" {
 		dlog.Printf("hitting the webs for missing pubkey: %s", keyname)
@@ -734,8 +725,7 @@ var zaggies = cache.New(cache.Options{Filler: func(keyname string) (httpsig.Publ
 }, Limit: 512})
 
 func zaggy(keyname string) (httpsig.PublicKey, error) {
-	var key httpsig.PublicKey
-	zaggies.Get(keyname, &key)
+	key, _ := zaggies.Get(keyname)
 	return key, nil
 }
 

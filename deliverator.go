@@ -74,6 +74,9 @@ func letitslide(err error) bool {
 	if strings.Contains(str, "http post status: 400") {
 		return true
 	}
+	if strings.Contains(str, "http post status: 422") {
+		return true
+	}
 	return false
 }
 
@@ -122,9 +125,8 @@ func deliveration(doover Doover) {
 	garage.StartKey(rcpt)
 	defer garage.FinishKey(rcpt)
 
-	var ki *KeyInfo
-	ok := ziggies.Get(doover.Userid, &ki)
-	if !ok {
+	ki := ziggy(doover.Userid)
+	if ki == nil {
 		elog.Printf("lost key for delivery")
 		return
 	}
@@ -133,8 +135,7 @@ func deliveration(doover Doover) {
 	if rcpt[0] == '%' {
 		inbox = rcpt[1:]
 	} else {
-		var box *Box
-		ok := boxofboxes.Get(rcpt, &box)
+		box, ok := boxofboxes.Get(rcpt)
 		if !ok {
 			ilog.Printf("failed getting inbox for %s", rcpt)
 			sayitagain(doover)

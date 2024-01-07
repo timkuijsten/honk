@@ -2,6 +2,24 @@ changelog
 
 ### next
 
++ Dim images in darkmode.
+
+- Remove the hoot: feature. The bird is dead.
+
+### 1.2.0 Forgotten Followup
+
++ Filter option to match unknown actors.
+
++ Update some dependencies.
+
++ Watch local.css for changes.
+
++ MacOS support. lol.
+
++ Wait for requests to drain on shutdown.
+
++ Handle quoteUrl property.
+
 + Reroute memes to donks in emergencies.
 
 + Fix handling of svg with bom fucks.

@@ -9,7 +9,7 @@ if [ "$v" \< "go1.18" ] ; then
 	false
 fi
 
-if [ \! \( -e /usr/include/sqlite3.h -o -e /usr/local/include/sqlite3.h \) ] ; then
+if [ \! \( -e /usr/include/sqlite3.h -o -e /usr/local/include/sqlite3.h -o `uname` = "Darwin" \) ] ; then
 	echo unable to find sqlite3.h header
 	echo please install libsqlite3 dev package
 	false

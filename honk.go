@@ -25,16 +25,18 @@ import (
 )
 
 type WhatAbout struct {
-	ID      int64
-	Name    string
-	Display string
-	About   string
-	HTAbout template.HTML
-	Onts    []string
-	Key     string
-	URL     string
-	Options UserOptions
-	SecKey  httpsig.PrivateKey
+	ID         int64
+	Name       string
+	Display    string
+	About      string
+	HTAbout    template.HTML
+	Onts       []string
+	Key        string
+	URL        string
+	Options    UserOptions
+	SecKey     httpsig.PrivateKey
+	ChatPubKey boxPubKey
+	ChatSecKey boxSecKey
 }
 
 type UserOptions struct {
@@ -48,6 +50,8 @@ type UserOptions struct {
 	Reaction     string `json:",omitempty"`
 	MeCount      int64
 	ChatCount    int64
+	ChatPubKey   string
+	ChatSecKey   string
 }
 
 type KeyInfo struct {

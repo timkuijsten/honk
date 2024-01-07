@@ -69,8 +69,16 @@ func isSVG(data []byte) bool {
 	}
 	ct := http.DetectContentType(data)
 	if strings.HasPrefix(ct, "text/xml") || strings.HasPrefix(ct, "text/plain") {
-		if bytes.HasPrefix(data, []byte("<svg ")) || bytes.HasPrefix(data, []byte("<!DOCTYPE svg PUBLIC")) {
-			return true
+		// this seems suboptimal
+		prefixes := []string{
+			`<svg `,
+			`<!DOCTYPE svg PUBLIC`,
+			`<?xml version="1.0" encoding="UTF-8"?> <svg `,
+		}
+		for _, pre := range prefixes {
+			if bytes.HasPrefix(data, []byte(pre)) {
+				return true
+			}
 		}
 	}
 	return ct == "image/svg+xml"
@@ -90,32 +98,7 @@ func imageFromSVG(data []byte) (*image.Image, error) {
 	return svg, nil
 }
 
-func bigshrink(data []byte) (*image.Image, error) {
-	if isSVG(data) {
-		return imageFromSVG(data)
-	}
-	cl, err := rpc.Dial("unix", backendSockname())
-	if err != nil {
-		return nil, err
-	}
-	defer cl.Close()
-	var res ShrinkerResult
-	err = cl.Call("Shrinker.Shrink", &ShrinkerArgs{
-		Buf: data,
-		Params: image.Params{
-			LimitSize: 14200 * 4200,
-			MaxWidth:  2600,
-			MaxHeight: 2048,
-			MaxSize:   768 * 1024,
-		},
-	}, &res)
-	if err != nil {
-		return nil, err
-	}
-	return res.Image, nil
-}
-
-func shrinkit(data []byte) (*image.Image, error) {
+func callshrink(data []byte, params image.Params) (*image.Image, error) {
 	if isSVG(data) {
 		return imageFromSVG(data)
 	}
@@ -127,7 +110,7 @@ func shrinkit(data []byte) (*image.Image, error) {
 	var res ShrinkerResult
 	err = cl.Call("Shrinker.Shrink", &ShrinkerArgs{
 		Buf:    data,
-		Params: image.Params{LimitSize: 4200 * 4200, MaxWidth: 2048, MaxHeight: 2048},
+		Params: params,
 	}, &res)
 	if err != nil {
 		return nil, err
@@ -135,7 +118,24 @@ func shrinkit(data []byte) (*image.Image, error) {
 	return res.Image, nil
 }
 
-var backendhooks []func()
+func bigshrink(data []byte) (*image.Image, error) {
+	params := image.Params{
+		LimitSize: 14200 * 4200,
+		MaxWidth:  2600,
+		MaxHeight: 2048,
+		MaxSize:   768 * 1024,
+	}
+	return callshrink(data, params)
+}
+
+func shrinkit(data []byte) (*image.Image, error) {
+	params := image.Params{
+		LimitSize: 4200 * 4200,
+		MaxWidth:  2048,
+		MaxHeight: 2048,
+	}
+	return callshrink(data, params)
+}
 
 func orphancheck() {
 	var b [1]byte
@@ -169,9 +169,7 @@ func backendServer() {
 	if err != nil {
 		elog.Printf("error setting backend limits: %s", err)
 	}
-	for _, h := range backendhooks {
-		h()
-	}
+	securitizebackend()
 	srv.Accept(lis)
 }
 
@@ -199,7 +197,7 @@ func runBackendServer() {
 		readyalready <- true
 	}()
 	go func() {
-		proc.Wait()
+		err := proc.Wait()
 		mtx.Lock()
 		defer mtx.Unlock()
 		if w != nil {

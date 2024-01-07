@@ -2,11 +2,13 @@
 <main>
 <div class="info" id="infobox">
 <div id="srvmsg">
+<div>
 {{ if .Name }}
 <p>{{ .Name }} <span class="left1em"><a href="/u/{{ .Name }}/rss">rss</a></span>
 <p>{{ .WhatAbout }}
 {{ end }}
-<p>{{ .ServerMessage }}
+{{ .ServerMessage }}
+</div>
 </div>
 {{ if .HonkCSRF }}
 {{ template "honkform.html" . }}
@@ -29,8 +31,9 @@
 {{ $MapLink := .MapLink }}
 {{ $Badonk := .User.Options.Reaction }}
 {{ $OmitImages := .User.Options.OmitImages }}
+{{ $UserURL := .User.URL }}
 {{ range .Honks }}
-{{ template "honk.html" map "Honk" . "MapLink" $MapLink "BonkCSRF" $BonkCSRF "IsPreview" $IsPreview "Badonk" $Badonk "OmitImages" $OmitImages }}
+{{ template "honk.html" map "Honk" . "MapLink" $MapLink "BonkCSRF" $BonkCSRF "IsPreview" $IsPreview "Badonk" $Badonk "OmitImages" $OmitImages "UserURL" $UserURL }}
 {{ end }}
 </div>
 </div>

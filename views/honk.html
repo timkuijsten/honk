@@ -126,7 +126,11 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ else }}
 <button class="flogit-untag">untag me</button>
 {{ end }}
+{{ if eq .Honk.Honker .UserURL }}
 <button><a href="/edit?xid={{ .Honk.XID }}">edit</a></button>
+{{ else }}
+<button disabled>nope</button>
+{{ end }}
 {{ if not (eq .Badonk "none") }}
 {{ if .Honk.IsReacted }}
 <button disabled>badonked</button>
