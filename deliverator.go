@@ -121,6 +121,8 @@ func deliverate(userid int64, rcpt string, msg []byte) {
 var garage = gate.NewLimiter(40)
 
 func deliveration(doover Doover) {
+	requestWG.Add(1)
+	defer requestWG.Done()
 	rcpt := doover.Rcpt
 	garage.StartKey(rcpt)
 	defer garage.FinishKey(rcpt)
@@ -207,6 +209,7 @@ func extractdoover(d *Doover) error {
 }
 
 func redeliverator() {
+	workinprogress++
 	sleeper := time.NewTimer(5 * time.Second)
 	for {
 		select {
@@ -216,6 +219,9 @@ func redeliverator() {
 			}
 			time.Sleep(5 * time.Second)
 		case <-sleeper.C:
+		case <-endoftheworld:
+			readyalready <- true
+			return
 		}
 
 		doovers := getdoovers()

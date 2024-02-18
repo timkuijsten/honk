@@ -19,14 +19,15 @@ function post(url, data) {
 	x.setRequestHeader("Content-Type", "application/x-www-form-urlencoded")
 	x.send(data)
 }
-function get(url, whendone, whentimedout) {
+function get(url, whendone, errfunction) {
 	var x = new XMLHttpRequest()
 	x.open("GET", url)
 	x.timeout = 15 * 1000
 	x.responseType = "json"
 	x.onload = function() { whendone(x) }
-	if (whentimedout) {
-		x.ontimeout = function(e) { whentimedout(x, e) }
+	if (errfunction) {
+		x.ontimeout = function(e) { errfunction(" timed out") }
+		x.onerror = function(e) { errfunction(" error") }
 	}
 	x.send()
 }
@@ -131,7 +132,7 @@ function fillinhonks(xhr, glowit) {
 	var holder = honksonpage.children[0]
 	var lenhonks = honks.length
 	for (var i = honks.length; i > 0; i--) {
-		var h = honks[i-1]
+		var h = honks[frontload ? i-1 : 0]
 		if (glowit)
 			h.classList.add("glow")
 		if (frontload) {
@@ -180,10 +181,10 @@ function refreshhonks(btn) {
 		} else {
 			refreshupdate(" status: " + xhr.status)
 		}
-	}, function(xhr, e) {
+	}, function(err) {
 		btn.innerHTML = "refresh"
 		btn.disabled = false
-		refreshupdate(" timed out")
+		refreshupdate(err)
 	})
 }
 function statechanger(evt) {
@@ -229,8 +230,8 @@ function switchtopage(name, arg) {
 			} else {
 				refreshupdate(" status: " + xhr.status)
 			}
-		}, function(xhr, e) {
-			refreshupdate(" timed out")
+		}, function(err) {
+			refreshupdate(err)
 		})
 	}
 	refreshupdate("")
@@ -272,6 +273,16 @@ function relinklinks() {
 		var xid = el.getAttribute("data-xid")
 		el.onclick = pageswitcher("honker", xid)
 		el.classList.remove("honkerlink")
+	}
+	els = document.getElementsByClassName("donklink")
+	while (els.length) {
+		let el = els[0]
+		el.onclick = function() {
+			el.children[0].classList.remove("donk")
+			el.onclick = null
+			return false
+		}
+		el.classList.remove("donklink")
 	}
 
 	els = document.querySelectorAll("#honksonpage article button")

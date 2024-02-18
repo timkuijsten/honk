@@ -45,6 +45,7 @@ var falsenames = []string{
 }
 
 const itiswhatitis = "https://www.w3.org/ns/activitystreams"
+const papersplease = "https://w3id.org/security/v1"
 const thewholeworld = "https://www.w3.org/ns/activitystreams#Public"
 const tinyworld = "as:Public"
 const chatKeyProp = "chatKeyV0"
@@ -175,12 +176,13 @@ func GetJunkTimeout(userid int64, url string, timeout time.Duration, final *stri
 		if strings.Contains(url, ".well-known/webfinger?resource") {
 			at = "application/jrd+json"
 		}
-		j, err := junk.Get(url, junk.GetArgs{
+		j, err := getsomejunk(url, junk.GetArgs{
 			Accept:  at,
 			Agent:   "honksnonk/5.0; " + serverName,
 			Timeout: timeout,
 			Client:  &client,
 			Fixup:   sign,
+			Limit:   1 * 1024 * 1024,
 		})
 		return j, err
 	}
@@ -191,6 +193,56 @@ func GetJunkTimeout(userid int64, url string, timeout time.Duration, final *stri
 	}
 	j := ji.(junk.Junk)
 	return j, nil
+}
+
+func getsomejunk(url string, args junk.GetArgs) (junk.Junk, error) {
+	client := http.DefaultClient
+	if args.Client != nil {
+		client = args.Client
+	}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if args.Accept != "" {
+		req.Header.Set("Accept", args.Accept)
+	}
+	if args.Agent != "" {
+		req.Header.Set("User-Agent", args.Agent)
+	}
+	if args.Fixup != nil {
+		err = args.Fixup(req)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if args.Timeout != 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), args.Timeout)
+		defer cancel()
+		req = req.WithContext(ctx)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case 200:
+	case 201:
+	case 202:
+	default:
+		return nil, fmt.Errorf("http get status: %d", resp.StatusCode)
+	}
+	ct := resp.Header.Get("Content-Type")
+	if args.Accept != "application/jrd+json" && !friendorfoe(ct) {
+		return nil, fmt.Errorf("incompatible content type %s", ct)
+	}
+	var r io.Reader = resp.Body
+	if args.Limit > 0 {
+		r = io.LimitReader(r, args.Limit)
+	}
+	return junk.Read(r)
 }
 
 func fetchsome(url string) ([]byte, error) {
@@ -217,7 +269,7 @@ func fetchsome(url string) ([]byte, error) {
 		return nil, fmt.Errorf("http get not 200: %d %s", resp.StatusCode, url)
 	}
 	var buf bytes.Buffer
-	limiter := io.LimitReader(resp.Body, 10*1024*1024)
+	limiter := io.LimitReader(resp.Body, 14*1024*1024)
 	io.Copy(&buf, limiter)
 	return buf.Bytes(), nil
 }
@@ -793,7 +845,7 @@ func xonksaver(user *WhatAbout, item junk.Junk, origin string) *Honk {
 		xonk.UserID = user.ID
 		xonk.Honker, _ = item.GetString("actor")
 		if xonk.Honker == "" {
-			xonk.Honker, _ = item.GetString("attributedTo")
+			xonk.Honker = extractattrto(item)
 		}
 		if originate(xonk.Honker) != origin {
 			ilog.Printf("out of bounds honker %s from %s", xonk.Honker, origin)
@@ -1287,6 +1339,9 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 	j["id"] = user.URL + "/" + h.What + "/" + shortxid(h.XID)
 	j["actor"] = user.URL
 	j["published"] = dt
+	if h.Public {
+		h.Audience = append(h.Audience, user.URL+"/followers")
+	}
 	j["to"] = h.Audience[0]
 	if len(h.Audience) > 1 {
 		j["cc"] = h.Audience[1:]
@@ -1653,7 +1708,7 @@ func collectiveaction(honk *Honk) {
 
 func junkuser(user *WhatAbout) junk.Junk {
 	j := junk.New()
-	j["@context"] = itiswhatitis
+	j["@context"] = []string{itiswhatitis, papersplease}
 	j["id"] = user.URL
 	j["inbox"] = user.URL + "/inbox"
 	j["outbox"] = user.URL + "/outbox"

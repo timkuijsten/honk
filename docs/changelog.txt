@@ -1,6 +1,26 @@
 changelog
 
-### next
+### 1.2.3 Regarded Reflection
+
++ Don't serve attachments to clients expecting activities.
+
+### 1.2.2 Nameless Neophyte
+
++ Ensure fetched activities are compatible content types.
+
++ Some federation interop improvements.
+
++ More complete API support.
+
++ More compact image arrangement.
+
+### 1.2.1 Solipsist Satisfaction
+
++ Federation reliability and compat improvements.
+
++ Fix 32 bit support.
+
++ Close databases to give the wal file a chance to checkpoint.
 
 + Dim images in darkmode.
 

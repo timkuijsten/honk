@@ -72,12 +72,6 @@ func upgradedb() {
 	}
 
 	switch dbversion {
-	case 40:
-		doordie(db, "PRAGMA journal_mode=WAL")
-		blobdb := openblobdb()
-		doordie(blobdb, "PRAGMA journal_mode=WAL")
-		doordie(db, "update config set value = 41 where key = 'dbversion'")
-		fallthrough
 	case 41:
 		tx, err := db.Begin()
 		if err != nil {
@@ -217,6 +211,7 @@ func upgradedb() {
 		fallthrough
 	case 48:
 		try("analyze")
+		closedatabases()
 
 	default:
 		elog.Fatalf("can't upgrade unknown version %d", dbversion)

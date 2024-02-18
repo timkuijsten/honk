@@ -32,6 +32,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"runtime/pprof"
 	"sort"
 	"strconv"
 	"strings"
@@ -275,7 +276,7 @@ func showrss(w http.ResponseWriter, r *http.Request) {
 		}
 		desc := string(honk.HTML)
 		if t := honk.Time; t != nil {
-			desc += fmt.Sprintf(`<p>Time: %s`, t.StartTime.Local().Format("03:04PM EDT Mon Jan 02"))
+			desc += fmt.Sprintf(`<p>Time: %s`, t.StartTime.Local().Format("03:04PM MST Mon Jan 02"))
 			if t.Duration != 0 {
 				desc += fmt.Sprintf(`<br>Duration: %s`, t.Duration)
 			}
@@ -1103,6 +1104,18 @@ func sameperson(h1, h2 *Honk) bool {
 		n2 = h2.Oonker
 	}
 	return n1 == n2
+}
+
+func threadposes(honks []*Honk, wanted int64) ([]*Honk, []int) {
+	var poses []int
+	var newhonks []*Honk
+	for i, honk := range honks {
+		if honk.ID > wanted {
+			newhonks = append(newhonks, honk)
+			poses = append(poses, i)
+		}
+	}
+	return newhonks, poses
 }
 
 func threadsort(honks []*Honk) []*Honk {
@@ -2380,7 +2393,13 @@ func servememe(w http.ResponseWriter, r *http.Request) {
 }
 
 func servefile(w http.ResponseWriter, r *http.Request) {
+	if friendorfoe(r.Header.Get("Accept")) {
+		dlog.Printf("incompatible accept for donk")
+		http.Error(w, "there are no activities here", http.StatusNotAcceptable)
+		return
+	}
 	xid := mux.Vars(r)["xid"]
+	preview := r.FormValue("preview") == "1"
 	var media string
 	var data []byte
 	row := stmtGetFileData.QueryRow(xid)
@@ -2389,6 +2408,12 @@ func servefile(w http.ResponseWriter, r *http.Request) {
 		elog.Printf("error loading file: %s", err)
 		http.NotFound(w, r)
 		return
+	}
+	if preview && strings.HasPrefix(media, "image") {
+		img, err := lilshrink(data)
+		if err == nil {
+			data = img.Data
+		}
 	}
 	w.Header().Set("Content-Type", media)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -2415,6 +2440,7 @@ type Hydration struct {
 	Honks     string
 	MeCount   int64
 	ChatCount int64
+	Poses     []int
 }
 
 func webhydra(w http.ResponseWriter, r *http.Request) {
@@ -2458,10 +2484,10 @@ func webhydra(w http.ResponseWriter, r *http.Request) {
 		hydra.Srvmsg = templates.Sprintf("honks by combo: %s", c)
 	case "convoy":
 		c := r.FormValue("c")
-		honks = gethonksbyconvoy(userid, c, wanted)
+		honks = gethonksbyconvoy(userid, c, 0)
 		honks = osmosis(honks, userid, false)
 		honks = threadsort(honks)
-		reversehonks(honks)
+		honks, hydra.Poses = threadposes(honks, wanted)
 		hydra.Srvmsg = templates.Sprintf("honks in convoy: %s", c)
 	case "honker":
 		xid := r.FormValue("xid")
@@ -2482,7 +2508,11 @@ func webhydra(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(honks) > 0 {
-		hydra.Tophid = honks[0].ID
+		if page == "convoy" {
+			hydra.Tophid = honks[len(honks)-1].ID
+		} else {
+			hydra.Tophid = honks[0].ID
+		}
 	} else {
 		hydra.Tophid = wanted
 	}
@@ -2567,6 +2597,24 @@ func apihandler(w http.ResponseWriter, r *http.Request) {
 		case "myhonks":
 			honks = gethonksbyuser(u.Username, true, wanted)
 			honks = osmosis(honks, userid, true)
+		case "saved":
+			honks = getsavedhonks(userid, wanted)
+		case "combo":
+			c := r.FormValue("c")
+			honks = gethonksbycombo(userid, c, wanted)
+			honks = osmosis(honks, userid, false)
+		case "convoy":
+			c := r.FormValue("c")
+			honks = gethonksbyconvoy(userid, c, 0)
+			honks = osmosis(honks, userid, false)
+			honks = threadsort(honks)
+			honks, _ = threadposes(honks, wanted)
+		case "honker":
+			xid := r.FormValue("xid")
+			honks = gethonksbyxonker(userid, xid, wanted)
+		case "search":
+			q := r.FormValue("q")
+			honks = gethonksbysearch(u.UserID, q, wanted)
 		default:
 			http.Error(w, "unknown page", http.StatusNotFound)
 			return
@@ -2582,12 +2630,15 @@ func apihandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		reverbolate(userid, honks)
+		user, _ := butwhatabout(u.Username)
 		j := junk.New()
 		j["honks"] = honks
+		j["mecount"] = user.Options.MeCount
+		j["chatcount"] = user.Options.ChatCount
 		j.Write(w)
 	case "sendactivity":
-		user, _ := butwhatabout(u.Username)
 		public := r.FormValue("public") == "1"
+		user, _ := butwhatabout(u.Username)
 		rcpts := boxuprcpts(user, r.Form["rcpt"], public)
 		msg := []byte(r.FormValue("msg"))
 		for rcpt := range rcpts {
@@ -2638,6 +2689,13 @@ func enditall() {
 	for i := 0; i < workinprogress; i++ {
 		endoftheworld <- true
 	}
+	if *cpuprofile != "" {
+		pprof.StopCPUProfile()
+	}
+	if *memprofile != "" {
+		pprof.WriteHeapProfile(memprofilefd)
+		memprofilefd.Close()
+	}
 	ilog.Printf("waiting...")
 	go func() {
 		time.Sleep(10 * time.Second)
@@ -2649,6 +2707,7 @@ func enditall() {
 	}
 	requestWG.Wait()
 	ilog.Printf("apocalypse")
+	closedatabases()
 	os.Exit(0)
 }
 

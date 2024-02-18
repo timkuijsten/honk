@@ -406,9 +406,14 @@ func grapevine(mentions []Mention) []string {
 func bunchofgrapes(m []string) []Mention {
 	var mentions []Mention
 	for i := range m {
-		where := gofish(m[i])
+		who := m[i]
+		if strings.HasPrefix(who, "@https://") {
+			mentions = append(mentions, Mention{Who: who, Where: who[1:]})
+			continue
+		}
+		where := gofish(who)
 		if where != "" {
-			mentions = append(mentions, Mention{Who: m[i], Where: where})
+			mentions = append(mentions, Mention{Who: who, Where: where})
 		}
 	}
 	return mentions
@@ -586,6 +591,9 @@ func fullname(name string, userid int64) string {
 
 func attoreplacer(m string) string {
 	fill := `<span class="h-card"><a class="u-url mention" href="%s">%s</a></span>`
+	if strings.HasPrefix(m, "@https://") {
+		return fmt.Sprintf(fill, html.EscapeString(m[1:]), html.EscapeString(m))
+	}
 	where := gofish(m)
 	if where == "" {
 		return m

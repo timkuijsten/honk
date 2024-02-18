@@ -23,6 +23,7 @@ import (
 	"log/syslog"
 	notrand "math/rand"
 	"os"
+	"runtime/pprof"
 	"strconv"
 	"time"
 
@@ -72,10 +73,28 @@ func errx(msg string, args ...interface{}) {
 	os.Exit(1)
 }
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+var memprofile = flag.String("memprofile", "", "write memory profile to this file")
+var memprofilefd *os.File
+
 func main() {
 	flag.StringVar(&dataDir, "datadir", dataDir, "data directory")
 	flag.StringVar(&viewDir, "viewdir", viewDir, "view directory")
 	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			errx("can't open cpu profile: %s", err)
+		}
+		pprof.StartCPUProfile(f)
+	}
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			errx("can't open mem profile: %s", err)
+		}
+		memprofilefd = f
+	}
 
 	log.Init(log.Options{Progname: "honk", Facility: syslog.LOG_UUCP})
 	elog = log.E

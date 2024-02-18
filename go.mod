@@ -9,7 +9,7 @@ require (
 	golang.org/x/net v0.19.0
 	humungus.tedunangst.com/r/go-sqlite3 v1.1.3
 	humungus.tedunangst.com/r/gonix v0.1.4
-	humungus.tedunangst.com/r/webs v0.7.9
+	humungus.tedunangst.com/r/webs v0.7.10
 )
 
 require (
