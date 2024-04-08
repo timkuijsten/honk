@@ -8,4 +8,6 @@ The gob encoding for backend rpc uses more memory than needed.
 	A custom encoding could reduce allocations.
 	Maybe the backend could fetch the data itself.
 
-
+Several columns and indices have potentially long shared prefixes.
+	These could be stored rearranged, perhaps with last four bytes prepended.
+	https://here/there/9876 -> 9876https://here/there/9876

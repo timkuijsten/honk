@@ -1,5 +1,45 @@
 changelog
 
+### next
+
++ Switch to storing attachments in the file system.
+
++ Some styling changes.
+
++ Experimental support for C2S activities.
+
++ Try harder to retrieve threads from the database.
+
+### 1.3.1 Retooled Reticule
+
++ Some logging fixes.
+
++ Ignore more activities that we don't care about.
+
++ Fix filter matching.
+
++ More documentation examples.
+
++ Retain advanced metadata in preview.
+
++ Alphabetical jump links for tags and honkers.
+
++ Poll rss when adding instead of waiting a full cycle.
+
+### 1.3.0 Big Bonsai
+
++ Some performance tuning.
+
++ Follow .rss feeds for hashtags.
+
++ Easier to inline attached images.
+
++ Optional .json urls for activities.
+
++ cc, link, name, and tags fields for advanced metadata.
+
++ <big> tag supported in html.
+
 ### 1.2.3 Regarded Reflection
 
 + Don't serve attachments to clients expecting activities.

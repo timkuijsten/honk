@@ -55,6 +55,9 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 <summary class="noise">{{ .HTPrecis }}<p></summary>
 <p>{{ .HTPrecis }}
 <p class="content">{{ .HTML }}
+{{ if .Link }}
+<p><a href="{{ .Link }}">{{ or .LegalName .Link }}</a>
+{{ end }}
 {{ with .Time }}
 <p>Time: {{ .StartTime.Local.Format "03:04PM MST Mon Jan 02"}}
 {{ if .Duration }}<br>Duration: {{ .Duration }}{{ end }}</p>
@@ -65,14 +68,14 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ range .Donks }}
 {{ if .Local }}
 {{ if eq .Media "text/plain" }}
-<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}</p>
+<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }} ({{ .Meta.Length }})</p>
 {{ else if eq .Media "application/pdf" }}
-<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}</p>
+<p><a href="/d/{{ .XID }}">Attachment: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }} ({{ .Meta.Length }})</p>
 {{ else }}
 {{ if $omitimages }}
-<p><a href="/d/{{ .XID }}">Image: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }}</p>
+<p><a href="/d/{{ .XID }}">Image: {{ .Name }}</a>{{ if not (eq .Desc .Name) }} {{ .Desc }}{{ end }} ({{.Meta.Width}}x{{.Meta.Height}} {{ .Meta.Length }})</p>
 {{ else }}
-<a class="donklink" href="/d/{{.XID}}"><img class="donk" src="/d/{{ .XID }}" loading=lazy title="{{ .Desc }}" alt="{{ .Desc }}"></a>
+<img class="donk donklink" src="/d/{{ .XID }}" loading=lazy title="{{ .Desc }}" alt="{{ .Desc }}" width="{{.Meta.Width}}" height="{{.Meta.Height}}">
 {{ end }}
 {{ end }}
 {{ else }}

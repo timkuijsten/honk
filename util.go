@@ -45,7 +45,7 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
-	_ "humungus.tedunangst.com/r/go-sqlite3"
+	"humungus.tedunangst.com/r/go-sqlite3"
 	"humungus.tedunangst.com/r/webs/httpsig"
 	"humungus.tedunangst.com/r/webs/login"
 )
@@ -56,6 +56,15 @@ var dbtimeformat = "2006-01-02 15:04:05"
 
 var alreadyopendb *sql.DB
 var stmtConfig *sql.Stmt
+
+func init() {
+	vers, num, _ := sqlite3.Version()
+	if num < 3034000 {
+		fmt.Fprintf(os.Stderr, "libsqlite is too old. required: %s found: %s\n",
+			"3.34.0", vers)
+		os.Exit(1)
+	}
+}
 
 func initdb() {
 	blobdbname := dataDir + "/blob.db"
@@ -170,17 +179,12 @@ func initblobdb(blobdbname string) {
 		elog.Print(err)
 		return
 	}
-	_, err = blobdb.Exec("create table filedata (xid text, media text, hash text, content blob)")
+	_, err = blobdb.Exec("create table filedata (xid text, content blob)")
 	if err != nil {
 		elog.Print(err)
 		return
 	}
 	_, err = blobdb.Exec("create index idx_filexid on filedata(xid)")
-	if err != nil {
-		elog.Print(err)
-		return
-	}
-	_, err = blobdb.Exec("create index idx_filehash on filedata(hash)")
 	if err != nil {
 		elog.Print(err)
 		return
@@ -266,7 +270,7 @@ func chpass(username string) {
 		elog.Print(err)
 		return
 	}
-	err = login.SetPassword(user.ID, pass)
+	err = login.SetPassword(int64(user.ID), pass)
 	if err != nil {
 		elog.Print(err)
 		return
@@ -388,7 +392,8 @@ func openblobdb() *sql.DB {
 	blobdbname := dataDir + "/blob.db"
 	_, err := os.Stat(blobdbname)
 	if err != nil {
-		elog.Fatalf("unable to open database: %s", err)
+		return nil
+		//elog.Fatalf("unable to open database: %s", err)
 	}
 	db, err := sql.Open("sqlite3", blobdbname)
 	if err != nil {
@@ -443,6 +448,7 @@ func openListener() (net.Listener, error) {
 	if listenAddr == "" {
 		return nil, fmt.Errorf("must have listenaddr")
 	}
+	dlog.Printf("starting web server on %s", listenAddr)
 	proto := "tcp"
 	if listenAddr[0] == '/' {
 		proto = "unix"
@@ -460,4 +466,11 @@ func openListener() (net.Listener, error) {
 	}
 	listenSocket = listener
 	return listener, nil
+}
+
+func getenv(key, def string) string {
+	if val, ok := os.LookupEnv(key); ok {
+		return val
+	}
+	return def
 }

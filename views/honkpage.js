@@ -278,7 +278,7 @@ function relinklinks() {
 	while (els.length) {
 		let el = els[0]
 		el.onclick = function() {
-			el.children[0].classList.remove("donk")
+			el.classList.remove("donk")
 			el.onclick = null
 			return false
 		}
@@ -353,6 +353,7 @@ function relinklinks() {
 function showhonkform(elem, rid, hname) {
 	var form = lehonkform
 	form.style = "display: block"
+	form.reset()
 	if (elem) {
 		form.remove()
 		elem.parentElement.parentElement.parentElement.insertAdjacentElement('beforebegin', form)
@@ -361,6 +362,8 @@ function showhonkform(elem, rid, hname) {
 		elem = document.getElementById("honkformhost")
 		elem.insertAdjacentElement('afterend', form)
 	}
+	var donker = document.getElementById("donker")
+	donker.children[1].textContent = ""
 	var ridinput = document.getElementById("ridinput")
 	var honknoise = document.getElementById("honknoise")
 	if (rid) {
@@ -376,6 +379,8 @@ function showhonkform(elem, rid, hname) {
 	}
 	var updateinput = document.getElementById("updatexidinput")
 	updateinput.value = ""
+	var savedfile = document.getElementById("saveddonkxid")
+	savedfile.value = ""
 	honknoise.focus()
 	return false
 }
@@ -455,48 +460,6 @@ function scrollprevioushonk() {
 	}
 }
 
-function hotkey(e) {
-	if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
-		return
-	if (e.ctrlKey || e.altKey)
-		return
-
-	switch (e.code) {
-	case "KeyR":
-		refreshhonks(document.getElementById("honkrefresher"));
-		break;
-	case "KeyS":
-		oldestnewest(document.getElementById("newerscroller"));
-		break;
-	case "KeyJ":
-		scrollnexthonk();
-		break;
-	case "KeyK":
-		scrollprevioushonk();
-		break;
-	case "KeyM":
-		var menu = document.getElementById("topmenu")
-		if (!menu.open) {
-			menu.open = true
-			menu.querySelector("a").focus()
-		} else {
-			menu.open = false
-		}
-		break
-	case "Escape":
-		var menu = document.getElementById("topmenu")
-		menu.open = false
-		break
-	case "Slash":
-		document.getElementById("topmenu").open = true
-		document.getElementById("searchbox").focus()
-		e.preventDefault()
-		break
-	}
-}
-
-document.addEventListener("keydown", hotkey)
-
 function addemu(elem) {
 	const data = elem.alt
 	const box = document.getElementById("honknoise");
@@ -541,13 +504,6 @@ function loademus() {
 	el.onclick = pageswitcher("saved", "")
 	el = document.getElementById("longagolink")
 	el.onclick = pageswitcher("longago", "")
-
-	var totop = document.querySelector(".nophone")
-	if (totop) {
-		totop.onclick = function() {
-			window.scrollTo(0,0)
-		}
-	}
 
 	var refreshbox = document.getElementById("refreshbox")
 	if (refreshbox) {

@@ -203,6 +203,7 @@ func importActivities(user *WhatAbout, filename, source string) {
 			honk.Whofore = 3
 		}
 		for _, att := range toot.Object.Attachment {
+			var meta DonkMeta
 			switch att.Type {
 			case "Document":
 				fname := fmt.Sprintf("%s/%s", source, att.Url)
@@ -215,7 +216,7 @@ func importActivities(user *WhatAbout, filename, source string) {
 				name := att.Name
 				desc := name
 				newurl := fmt.Sprintf("https://%s/d/%s", serverName, u)
-				fileid, err := savefile(name, desc, newurl, att.MediaType, true, data)
+				fileid, err := savefile(name, desc, newurl, att.MediaType, true, data, &meta)
 				if err != nil {
 					elog.Printf("error saving media: %s", fname)
 					continue
@@ -260,7 +261,7 @@ func importMastotooters(user *WhatAbout, source string) {
 		name := ""
 		flavor := "peep"
 		combos := ""
-		_, err := savehonker(user, url, name, flavor, combos, mj)
+		_, _, err := savehonker(user, url, name, flavor, combos, mj)
 		if err != nil {
 			elog.Printf("trouble with a honker: %s", err)
 		}
@@ -389,7 +390,7 @@ func importTwitter(username, source string) {
 	}
 
 	var tweets []*Tweet
-	fd, err := os.Open(source + "/tweets.js")
+	fd, err := os.Open(source + "/tweet.js")
 	if err != nil {
 		elog.Fatal(err)
 	}
@@ -458,10 +459,11 @@ func importTwitter(username, source string) {
 			noise = strings.Replace(noise, r.URL, r.ExpandedURL, -1)
 		}
 		for _, m := range t.Tweet.Entities.Media {
+			var meta DonkMeta
 			u := m.MediaURL
 			idx := strings.LastIndexByte(u, '/')
 			u = u[idx+1:]
-			fname := fmt.Sprintf("%s/tweets_media/%s-%s", source, t.Tweet.IdStr, u)
+			fname := fmt.Sprintf("%s/tweet_media/%s-%s", source, t.Tweet.IdStr, u)
 			data, err := ioutil.ReadFile(fname)
 			if err != nil {
 				elog.Printf("error reading media: %s", fname)
@@ -469,7 +471,7 @@ func importTwitter(username, source string) {
 			}
 			newurl := fmt.Sprintf("https://%s/d/%s", serverName, u)
 
-			fileid, err := savefile(u, u, newurl, "image/jpg", true, data)
+			fileid, err := savefile(u, u, newurl, "image/jpg", true, data, &meta)
 			if err != nil {
 				elog.Printf("error saving media: %s", fname)
 				continue
@@ -540,6 +542,7 @@ func importInstagram(username, source string) {
 			Whofore:  2,
 		}
 		{
+			var meta DonkMeta
 			u := xfiltrate()
 			fname := fmt.Sprintf("%s/%s", source, g.URI)
 			data, err := ioutil.ReadFile(fname)
@@ -549,7 +552,7 @@ func importInstagram(username, source string) {
 			}
 			newurl := fmt.Sprintf("https://%s/d/%s", serverName, u)
 
-			fileid, err := savefile(u, u, newurl, "image/jpg", true, data)
+			fileid, err := savefile(u, u, newurl, "image/jpg", true, data, &meta)
 			if err != nil {
 				elog.Printf("error saving media: %s", fname)
 				continue
@@ -638,20 +641,19 @@ func export(username, file string) {
 		if donk == "" {
 			continue
 		}
-		var media string
 		var data []byte
 		w, err := zd.Create("media/" + donk)
 		if err != nil {
 			elog.Printf("error creating %s: %s", donk, err)
 			continue
 		}
-		row := stmtGetFileData.QueryRow(donk)
-		err = row.Scan(&media, &data)
+		data, closer, err := loaddata(donk)
 		if err != nil {
 			elog.Printf("error scanning file %s: %s", donk, err)
 			continue
 		}
 		w.Write(data)
+		closer()
 	}
 	zd.Close()
 	fd.Close()

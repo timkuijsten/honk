@@ -25,7 +25,7 @@ import (
 )
 
 type WhatAbout struct {
-	ID         int64
+	ID         UserID
 	Name       string
 	Display    string
 	About      string
@@ -59,42 +59,48 @@ type KeyInfo struct {
 	seckey  httpsig.PrivateKey
 }
 
-const serverUID int64 = -2
-const readyLuserOne int64 = 1
+type UserID int64
+
+const serverUID UserID = -2
+const readyLuserOne UserID = 1
 
 type Honk struct {
-	ID       int64
-	UserID   int64
-	Username string
-	What     string
-	Honker   string
-	Handle   string
-	Handles  string
-	Oonker   string
-	Oondle   string
-	XID      string
-	RID      string
-	Date     time.Time
-	URL      string
-	Noise    string
-	Precis   string
-	Format   string
-	Convoy   string
-	Audience []string
-	Public   bool
-	Whofore  int64
-	Replies  []*Honk
-	Flags    int64
-	HTPrecis template.HTML
-	HTML     template.HTML
-	Style    string
-	Open     string
-	Donks    []*Donk
-	Onts     []string
-	Place    *Place
-	Time     *Time
-	Mentions []Mention
-	Badonks  []Badonk
+	ID        int64
+	UserID    UserID
+	Username  string
+	What      string
+	Honker    string
+	Handle    string
+	Handles   string
+	Oonker    string
+	Oondle    string
+	XID       string
+	RID       string
+	Date      time.Time
+	URL       string
+	Noise     string
+	Precis    string
+	Format    string
+	Convoy    string
+	Audience  []string
+	Public    bool
+	Whofore   int64
+	Replies   []*Honk
+	Flags     int64
+	HTPrecis  template.HTML
+	HTML      template.HTML
+	Style     string
+	Open      string
+	Donks     []*Donk
+	Onts      []string
+	Place     *Place
+	Time      *Time
+	Link      string
+	Mentions  []Mention
+	Badonks   []Badonk
+	SeeAlso   string
+	Onties    string
+	LegalName string
 }
 
 type Badonk struct {
@@ -104,7 +110,7 @@ type Badonk struct {
 
 type Chonk struct {
 	ID     int64
-	UserID int64
+	UserID UserID
 	XID    string
 	Who    string
 	Target string
@@ -202,6 +208,12 @@ type Donk struct {
 	Media    string
 	Local    bool
 	External bool
+	Meta     DonkMeta
+}
+type DonkMeta struct {
+	Length int `json:",omitempty"`
+	Width  int `json:",omitempty"`
+	Height int `json:",omitempty"`
 }
 
 type Place struct {
@@ -243,7 +255,7 @@ type Time struct {
 
 type Honker struct {
 	ID     int64
-	UserID int64
+	UserID UserID
 	Name   string
 	XID    string
 	Handle string
