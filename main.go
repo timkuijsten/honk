@@ -186,6 +186,9 @@ func main() {
 	if !ok {
 		errx("don't know about %q", cmd)
 	}
+	if c.nargs > 0 && len(args) != c.nargs {
+		errx("incorrect arg count: %s", c.help2)
+	}
 
 	c.callback(args)
 }

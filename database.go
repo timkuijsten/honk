@@ -301,7 +301,7 @@ func gethonksbycombo(userid UserID, combo string, wanted int64) []*Honk {
 	return getsomehonks(rows, err)
 }
 func gethonksbyconvoy(userid UserID, convoy string, wanted int64) []*Honk {
-	rows, err := stmtHonksByConvoy.Query(convoy, wanted, userid)
+	rows, err := stmtHonksByConvoy.Query(convoy, wanted, userid, 1000)
 	return getsomehonks(rows, err)
 }
 func gethonksbysearch(userid UserID, q string, wanted int64) []*Honk {
@@ -773,7 +773,7 @@ func savehonk(h *Honk) error {
 		err = saveextras(tx, h)
 	}
 	if err == nil {
-		if h.Whofore == 1 {
+		if h.Whofore == WhoAtme {
 			dlog.Printf("another one for me: %s", h.XID)
 			meplusone(tx, h.UserID)
 		}
@@ -987,8 +987,12 @@ func getxonker(what, flav string) string {
 	return res
 }
 
-func savexonker(what, value, flav, when string) {
-	stmtSaveXonker.Exec(what, value, flav, when)
+func savexonker(what, value, flav string) {
+	when := time.Now().UTC().Format(dbtimeformat)
+	_, err := stmtSaveXonker.Exec(what, value, flav, when)
+	if err != nil {
+		elog.Printf("error saving xonker: %s", err)
+	}
 }
 
 func savehonker(user *WhatAbout, url, name, flavor, combos, mj string) (int64, string, error) {
@@ -1154,7 +1158,7 @@ func prepareStatements(db *sql.DB) {
 		select xid, convoy from honks, getthread where honks.rid <> '' and honks.rid = getthread.x
 		union
 		select rid, convoy from honks, getthread where honks.xid = getthread.x and rid <> ''
-	) `+selecthonks+"where honks.honkid > ? and honks.userid = ? and xid in (select x from getthread)"+limit)
+	) `+selecthonks+"where honks.honkid > ? and honks.userid = ? and xid in (select x from getthread)"+smalllimit)
 	stmtHonksByOntology = preparetodie(db, selecthonks+"join onts on honks.honkid = onts.honkid where honks.honkid > ? and onts.ontology = ? and (honks.userid = ? or (? = -1 and honks.whofore = 2))"+limit)
 
 	stmtSaveMeta = preparetodie(db, "insert into honkmeta (honkid, genus, json) values (?, ?, ?)")
@@ -1190,7 +1194,7 @@ func prepareStatements(db *sql.DB) {
 	stmtGetXonker = preparetodie(db, "select info from xonkers where name = ? and flavor = ?")
 	stmtSaveXonker = preparetodie(db, "insert into xonkers (name, info, flavor, dt) values (?, ?, ?, ?)")
 	stmtDeleteXonker = preparetodie(db, "delete from xonkers where name = ? and flavor = ? and dt < ?")
-	stmtDeleteOldXonkers = preparetodie(db, "delete from xonkers where flavor = ? and dt < ?")
+	stmtDeleteOldXonkers = preparetodie(db, "delete from xonkers where dt < ? and flavor <> 'handle'")
 	stmtRecentHonkers = preparetodie(db, "select distinct(honker) from honks where userid = ? and honker not in (select xid from honkers where userid = ? and flavor = 'sub') order by honkid desc limit 100")
 	stmtUpdateFlags = preparetodie(db, "update honks set flags = flags | ? where honkid = ?")
 	stmtClearFlags = preparetodie(db, "update honks set flags = flags & ~ ? where honkid = ?")

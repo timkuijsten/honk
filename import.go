@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"io/ioutil"
 	"log"
 	"os"
 	"regexp"
@@ -48,6 +47,7 @@ func importMain(username, flavor, source string) {
 }
 
 type ActivityObject struct {
+	Id           string
 	AttributedTo string
 	Summary      string
 	Content      string
@@ -195,19 +195,19 @@ func importActivities(user *WhatAbout, filename, source string) {
 			Audience: audience,
 			Noise:    content,
 			Convoy:   convoy,
-			Whofore:  2,
+			Whofore:  WhoPublic,
 			Format:   format,
 			Precis:   toot.Object.Summary,
 		}
 		if !loudandproud(honk.Audience) {
-			honk.Whofore = 3
+			honk.Whofore = WhoPrivate
 		}
 		for _, att := range toot.Object.Attachment {
 			var meta DonkMeta
 			switch att.Type {
 			case "Document":
 				fname := fmt.Sprintf("%s/%s", source, att.Url)
-				data, err := ioutil.ReadFile(fname)
+				data, err := os.ReadFile(fname)
 				if err != nil {
 					elog.Printf("error reading media for %s: %s", honk.XID, fname)
 					continue
@@ -450,7 +450,7 @@ func importTwitter(username, source string) {
 			Audience: audience,
 			Convoy:   t.convoy,
 			Public:   true,
-			Whofore:  2,
+			Whofore:  WhoPublic,
 		}
 		noise += t.Tweet.FullText
 		// unbelievable
@@ -464,7 +464,7 @@ func importTwitter(username, source string) {
 			idx := strings.LastIndexByte(u, '/')
 			u = u[idx+1:]
 			fname := fmt.Sprintf("%s/tweet_media/%s-%s", source, t.Tweet.IdStr, u)
-			data, err := ioutil.ReadFile(fname)
+			data, err := os.ReadFile(fname)
 			if err != nil {
 				elog.Printf("error reading media: %s", fname)
 				continue
@@ -539,13 +539,13 @@ func importInstagram(username, source string) {
 			Audience: audience,
 			Convoy:   convoy,
 			Public:   true,
-			Whofore:  2,
+			Whofore:  WhoPublic,
 		}
 		{
 			var meta DonkMeta
 			u := xfiltrate()
 			fname := fmt.Sprintf("%s/%s", source, g.URI)
-			data, err := ioutil.ReadFile(fname)
+			data, err := os.ReadFile(fname)
 			if err != nil {
 				elog.Printf("error reading media: %s", fname)
 				continue
@@ -641,7 +641,6 @@ func export(username, file string) {
 		if donk == "" {
 			continue
 		}
-		var data []byte
 		w, err := zd.Create("media/" + donk)
 		if err != nil {
 			elog.Printf("error creating %s: %s", donk, err)
@@ -657,4 +656,120 @@ func export(username, file string) {
 	}
 	zd.Close()
 	fd.Close()
+}
+
+func dumpthread(username, convoy string) {
+	user, _ := butwhatabout(username)
+	honks := gethonksbyconvoy(user.ID, convoy, 0)
+	var jonks []junk.Junk
+	for _, honk := range honks {
+		noise := honk.Noise
+		j, jo := jonkjonk(user, honk)
+		if honk.Format == "markdown" {
+			source := junk.New()
+			source["mediaType"] = "text/markdown"
+			source["content"] = noise
+			jo["source"] = source
+		}
+		jonks = append(jonks, j)
+	}
+	j := junk.New()
+	j["@context"] = itiswhatitis
+	j["orderedItems"] = jonks
+	j.Write(os.Stdout)
+}
+func rawimport(username, filename string) {
+	user, _ := butwhatabout(username)
+	type Activity struct {
+		Id     string
+		Type   string
+		To     interface{}
+		Cc     []string
+		Object ActivityObject
+	}
+	var outbox struct {
+		OrderedItems []Activity
+	}
+	ilog.Println("Importing honks...")
+	fd, err := os.Open(filename)
+	if err != nil {
+		elog.Fatal(err)
+	}
+	dec := json.NewDecoder(fd)
+	err = dec.Decode(&outbox)
+	if err != nil {
+		elog.Fatalf("error parsing json: %s", err)
+	}
+	fd.Close()
+
+	havetoot := func(xid string) bool {
+		var id int64
+		row := stmtFindXonk.QueryRow(user.ID, xid)
+		err := row.Scan(&id)
+		if err == nil {
+			return true
+		}
+		return false
+	}
+
+	items := outbox.OrderedItems
+	for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
+		items[i], items[j] = items[j], items[i]
+	}
+	for _, item := range items {
+		toot := item
+		if toot.Type != "Create" {
+			continue
+		}
+		xid := toot.Object.Id
+		if havetoot(xid) {
+			continue
+		}
+
+		convoy := toot.Object.Context
+		if convoy == "" {
+			convoy = toot.Object.Conversation
+		}
+		var audience []string
+		to, ok := toot.To.(string)
+		if ok {
+			audience = append(audience, to)
+		} else {
+			for _, t := range toot.To.([]interface{}) {
+				audience = append(audience, t.(string))
+			}
+		}
+		content := toot.Object.Content
+		format := "html"
+		if toot.Object.Source.MediaType == "text/markdown" {
+			content = toot.Object.Source.Content
+			format = "markdown"
+		}
+		audience = append(audience, toot.Cc...)
+		honk := Honk{
+			UserID:   user.ID,
+			What:     "honk",
+			Honker:   toot.Object.AttributedTo,
+			XID:      xid,
+			RID:      toot.Object.InReplyTo,
+			Date:     toot.Object.Published,
+			URL:      xid,
+			Audience: audience,
+			Noise:    content,
+			Convoy:   convoy,
+			Whofore:  WhoPublic,
+			Format:   format,
+			Precis:   toot.Object.Summary,
+		}
+		if !loudandproud(honk.Audience) {
+			honk.Whofore = WhoPrivate
+		}
+		for _, t := range toot.Object.Tag {
+			switch t.Type {
+			case "Hashtag":
+				honk.Onts = append(honk.Onts, t.Name)
+			}
+		}
+		savehonk(&honk)
+	}
 }

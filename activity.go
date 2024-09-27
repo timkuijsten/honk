@@ -28,6 +28,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"humungus.tedunangst.com/r/webs/gate"
@@ -104,7 +105,7 @@ func PostMsg(keyname string, key httpsig.PrivateKey, url string, msg []byte) err
 	case 201:
 	case 202:
 	default:
-		var buf [80]byte
+		var buf [240]byte
 		n, _ := resp.Body.Read(buf[:])
 		dlog.Printf("post failure message: %s", buf[:n])
 		return fmt.Errorf("http post status: %d", resp.StatusCode)
@@ -423,20 +424,28 @@ var boxofboxes = gencache.New(gencache.Options[string, *Box]{Fill: func(ident st
 		var j junk.Junk
 		j, err = GetJunk(readyLuserOne, ident)
 		if err != nil {
-			dlog.Printf("error getting boxes: %s", err)
-			return nil, false
+			dlog.Printf("error getting boxes for %s: %s", ident, err)
+			str := err.Error()
+			if strings.Contains(str, "http get status: 410") ||
+				strings.Contains(str, "http get status: 404") {
+				savexonker(ident, "dead", "boxes")
+			}
+			return nil, true
 		}
 		allinjest(originate(ident), j)
 		row = stmtGetXonker.QueryRow(ident, "boxes")
 		err = row.Scan(&info)
 	}
 	if err == nil {
+		if info == "dead" {
+			return nil, true
+		}
 		m := strings.Split(info, " ")
 		b := &Box{In: m[0], Out: m[1], Shared: m[2]}
 		return b, true
 	}
 	return nil, false
-}})
+}, Invalidator: &xonkInvalidator})
 
 var gettergate = gate.NewLimiter(1)
 
@@ -671,7 +680,8 @@ func xonksaver2(user *WhatAbout, item junk.Junk, origin string, myown bool) *Hon
 
 	xonkxonkfn2 = func(item junk.Junk, origin string, isUpdate bool, bonker string, myown bool) *Honk {
 		id, _ := item.GetString("id")
-		what := firstofmany(item, "type")
+		typ := firstofmany(item, "type")
+		what := typ
 		dt, ok := item.GetString("published")
 		if !ok {
 			dt = time.Now().Format(time.RFC3339)
@@ -828,18 +838,20 @@ func xonksaver2(user *WhatAbout, item junk.Junk, origin string, myown bool) *Hon
 			fallthrough
 		case "Audio":
 			fallthrough
+		case "Video":
+			fallthrough
 		case "Image":
-			if what == "Image" {
+			if what == "Image" || what == "Video" {
 				preferorig = true
 			}
 			fallthrough
-		case "Video":
-			fallthrough
 		case "Question":
 			fallthrough
-		case "Note":
+		case "Commit":
 			fallthrough
 		case "Article":
+			fallthrough
+		case "Note":
 			obj = item
 			what = "honk"
 		case "Event":
@@ -926,6 +938,23 @@ func xonksaver2(user *WhatAbout, item junk.Junk, origin string, myown bool) *Hon
 				dt = dt2
 			}
 			content, _ := obj.GetString("content")
+			if mt, _ := obj.GetString("mediaType"); mt == "text/plain" {
+				if typ == "Commit" {
+					content = highlight(content, "diff")
+				} else {
+					content = html.EscapeString(content)
+				}
+			}
+			if !strings.HasPrefix(content, "<p>") {
+				content = "<p>" + content
+			}
+			if desc, _ := obj.GetMap("description"); desc != nil {
+				content2, _ := desc.GetString("content")
+				if mt, _ := desc.GetString("mediaType"); mt == "text/plain" {
+					content2 = html.EscapeString(content2)
+				}
+				content = content2 + content
+			}
 			if !strings.HasPrefix(content, "<p>") {
 				content = "<p>" + content
 			}
@@ -939,7 +968,7 @@ func xonksaver2(user *WhatAbout, item junk.Junk, origin string, myown bool) *Hon
 			if sens, _ := obj["sensitive"].(bool); sens && precis == "" {
 				precis = "unspecified horror"
 			}
-			if waspage {
+			if waspage && url != "" {
 				content += fmt.Sprintf(`<p><a href="%s">%s</a>`, url, url)
 				url = xid
 			}
@@ -1050,6 +1079,9 @@ func xonksaver2(user *WhatAbout, item junk.Junk, origin string, myown bool) *Hon
 						xonk.Noise += fmt.Sprintf(`<p><a href="%s">%s</a>`, u, u)
 						return
 					}
+					if u == id {
+						return
+					}
 					if name == "" {
 						name = u
 					}
@@ -1058,9 +1090,6 @@ func xonksaver2(user *WhatAbout, item junk.Junk, origin string, myown bool) *Hon
 				}
 				if skipMedia(&xonk) {
 					localize = false
-				}
-				if preferorig && !localize {
-					return
 				}
 				donk := savedonk(u, name, desc, mt, localize)
 				if donk != nil {
@@ -1139,7 +1168,7 @@ func xonksaver2(user *WhatAbout, item junk.Junk, origin string, myown bool) *Hon
 					m.Who, _ = tag.GetString("name")
 					m.Where, _ = tag.GetString("href")
 					if m.Who == "" {
-						m.Where = m.Who
+						m.Who = m.Where
 					}
 					if m.Where != "" {
 						mentions = append(mentions, m)
@@ -1216,14 +1245,14 @@ func xonksaver2(user *WhatAbout, item junk.Junk, origin string, myown bool) *Hon
 		xonk.Mentions = mentions
 		if myown {
 			if xonk.Public {
-				xonk.Whofore = 2
+				xonk.Whofore = WhoPublic
 			} else {
-				xonk.Whofore = 3
+				xonk.Whofore = WhoPrivate
 			}
 		} else {
 			for _, m := range mentions {
 				if m.Where == user.URL {
-					xonk.Whofore = 1
+					xonk.Whofore = WhoAtme
 				}
 			}
 		}
@@ -1395,7 +1424,8 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 	var jo junk.Junk
 	j := junk.New()
 	j["id"] = user.URL + "/" + h.What + "/" + shortxid(h.XID)
-	j["actor"] = h.Honker
+	who := h.Honker
+	j["actor"] = who
 	j["published"] = dt
 	if h.Public && h.Honker == user.URL {
 		h.Audience = append(h.Audience, user.URL+"/followers")
@@ -1415,16 +1445,13 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 		jo = junk.New()
 		jo["id"] = h.XID
 		jo["type"] = "Note"
-		if h.What == "event" {
-			jo["type"] = "Event"
-		}
 		if h.What == "update" {
 			j["type"] = "Update"
 			jo["updated"] = dt
 		}
 		jo["published"] = dt
 		jo["url"] = h.XID
-		jo["attributedTo"] = h.Honker
+		jo["attributedTo"] = who
 		if h.RID != "" {
 			jo["inReplyTo"] = h.RID
 		}
@@ -1531,6 +1558,12 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 			jl["href"] = h.Link
 			atts = append(atts, jl)
 		}
+		if tooooFancy(h.Noise) {
+			jo["type"] = "Article"
+		}
+		if h.What == "event" {
+			jo["type"] = "Event"
+		}
 		if len(atts) > 0 {
 			jo["attachment"] = atts
 		}
@@ -1591,6 +1624,10 @@ func jonkjonk(user *WhatAbout, h *Honk) (junk.Junk, junk.Junk) {
 	return j, jo
 }
 
+func tooooFancy(noise string) bool {
+	return strings.Contains(noise, "<img") || strings.Contains(noise, "<table")
+}
+
 var oldjonks = gencache.New(gencache.Options[string, []byte]{Fill: func(xid string) ([]byte, bool) {
 	row := stmtAnyXonk.QueryRow(xid)
 	honk := scanhonk(row)
@@ -1601,7 +1638,7 @@ var oldjonks = gencache.New(gencache.Options[string, []byte]{Fill: func(xid stri
 	rawhonks := gethonksbyconvoy(honk.UserID, honk.Convoy, 0)
 	reversehonks(rawhonks)
 	for _, h := range rawhonks {
-		if h.RID == honk.XID && h.Public && (h.Whofore == 2 || h.IsAcked()) {
+		if h.RID == honk.XID && h.Public && (h.Whofore == WhoPublic || h.IsAcked()) {
 			honk.Replies = append(honk.Replies, h)
 		}
 	}
@@ -1622,21 +1659,33 @@ func gimmejonk(xid string) ([]byte, bool) {
 
 func boxuprcpts(user *WhatAbout, addresses []string, useshared bool) map[string]bool {
 	rcpts := make(map[string]bool)
-	for _, a := range addresses {
+	var wg sync.WaitGroup
+	var mtx sync.Mutex
+	for i := range addresses {
+		a := addresses[i]
 		if a == "" || a == thewholeworld || a == user.URL || strings.HasSuffix(a, "/followers") {
 			continue
 		}
 		if a[0] == '%' {
+			mtx.Lock()
 			rcpts[a] = true
+			mtx.Unlock()
 			continue
 		}
-		box, ok := boxofboxes.Get(a)
-		if ok && useshared && box.Shared != "" {
-			rcpts["%"+box.Shared] = true
-		} else {
-			rcpts[a] = true
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			box, _ := boxofboxes.Get(a)
+			mtx.Lock()
+			if box != nil && useshared && box.Shared != "" {
+				rcpts["%"+box.Shared] = true
+			} else {
+				rcpts[a] = true
+			}
+			mtx.Unlock()
+		}()
 	}
+	wg.Wait()
 	return rcpts
 }
 
@@ -1711,35 +1760,23 @@ func honkworldwide(user *WhatAbout, honk *Honk) {
 	jonk["@context"] = itiswhatitis
 	msg := jonk.ToBytes()
 
-	rcpts := boxuprcpts(user, honk.Audience, honk.Public)
+	aud := honk.Audience
 
 	if honk.Public {
 		for _, h := range getdubs(user.ID) {
 			if h.XID == user.URL {
 				continue
 			}
-			box, ok := boxofboxes.Get(h.XID)
-			if ok && box.Shared != "" {
-				rcpts["%"+box.Shared] = true
-			} else {
-				rcpts[h.XID] = true
-			}
+			aud = append(aud, h.XID)
 		}
 		if honk.What == "update" {
 			for _, f := range getbacktracks(honk.XID) {
-				if f[0] == '%' {
-					rcpts[f] = true
-				} else {
-					box, ok := boxofboxes.Get(f)
-					if ok && box.Shared != "" {
-						rcpts["%"+box.Shared] = true
-					} else {
-						rcpts[f] = true
-					}
-				}
+				aud = append(aud, f)
 			}
 		}
 	}
+	rcpts := boxuprcpts(user, aud, honk.Public)
+
 	for a := range rcpts {
 		go deliverate(user.ID, a, msg)
 	}
@@ -1764,8 +1801,8 @@ func collectiveaction(honk *Honk) {
 		j["target"] = serverURL("/o/%s", ont[1:])
 		rcpts := make(map[string]bool)
 		for _, dub := range dubs {
-			box, ok := boxofboxes.Get(dub.XID)
-			if ok && box.Shared != "" {
+			box, _ := boxofboxes.Get(dub.XID)
+			if box != nil && box.Shared != "" {
 				rcpts["%"+box.Shared] = true
 			} else {
 				rcpts[dub.XID] = true
@@ -1872,16 +1909,12 @@ var handfull = gencache.New(gencache.Options[string, string]{Fill: func(name str
 		rel, _ := l.GetString("rel")
 		t, _ := l.GetString("type")
 		if rel == "self" && friendorfoe(t) {
-			when := time.Now().UTC().Format(dbtimeformat)
-			_, err := stmtSaveXonker.Exec(name, href, "fishname", when)
-			if err != nil {
-				elog.Printf("error saving fishname: %s", err)
-			}
+			savexonker(name, href, "fishname")
 			return href, true
 		}
 	}
 	return href, true
-}, Duration: 1 * time.Minute})
+}, Invalidator: &xonkInvalidator})
 
 func gofish(name string) string {
 	if name[0] == '@' {
@@ -1924,6 +1957,12 @@ func somethingabout(obj junk.Junk) (*SomeThing, error) {
 	case "Application":
 		fallthrough
 	case "Service":
+		fallthrough
+	case "Team":
+		fallthrough
+	case "Project":
+		fallthrough
+	case "Repository":
 		info.What = SomeActor
 	case "OrderedCollection":
 		isowned = true
@@ -1963,11 +2002,7 @@ func allinjest(origin string, obj junk.Junk) {
 	ingesthandle(origin, obj)
 	chatkey, ok := obj.GetString(chatKeyProp)
 	if ok {
-		when := time.Now().UTC().Format(dbtimeformat)
-		_, err := stmtSaveXonker.Exec(ident, chatkey, chatKeyProp, when)
-		if err != nil {
-			elog.Printf("error saving chatkey: %s", err)
-		}
+		savexonker(ident, chatkey, chatKeyProp)
 	}
 }
 
@@ -2033,12 +2068,8 @@ func ingestboxes(origin string, obj junk.Junk) {
 	outbox, _ := obj.GetString("outbox")
 	sbox, _ := obj.GetString("endpoints", "sharedInbox")
 	if inbox != "" {
-		when := time.Now().UTC().Format(dbtimeformat)
 		m := strings.Join([]string{inbox, outbox, sbox}, " ")
-		_, err = stmtSaveXonker.Exec(ident, m, "boxes", when)
-		if err != nil {
-			elog.Printf("error saving boxes: %s", err)
-		}
+		savexonker(ident, m, "boxes")
 	}
 }
 
@@ -2058,11 +2089,7 @@ func ingesthandle(origin string, obj junk.Junk) {
 	}
 	handle, _ = obj.GetString("preferredUsername")
 	if handle != "" {
-		when := time.Now().UTC().Format(dbtimeformat)
-		_, err = stmtSaveXonker.Exec(xid, handle, "handle", when)
-		if err != nil {
-			elog.Printf("error saving handle: %s", err)
-		}
+		savexonker(xid, handle, "handle")
 	}
 }
 
@@ -2085,8 +2112,8 @@ func updateMe(username string) {
 		if f.XID == user.URL {
 			continue
 		}
-		box, ok := boxofboxes.Get(f.XID)
-		if ok && box.Shared != "" {
+		box, _ := boxofboxes.Get(f.XID)
+		if box != nil && box.Shared != "" {
 			rcpts["%"+box.Shared] = true
 		} else {
 			rcpts[f.XID] = true

@@ -49,6 +49,7 @@ import (
 	"humungus.tedunangst.com/r/webs/login"
 	"humungus.tedunangst.com/r/webs/rss"
 	"humungus.tedunangst.com/r/webs/templates"
+	"humungus.tedunangst.com/r/webs/totp"
 )
 
 var readviews *templates.Template
@@ -361,8 +362,8 @@ func ping(user *WhatAbout, who string) {
 		ilog.Printf("nobody to ping!")
 		return
 	}
-	box, ok := boxofboxes.Get(who)
-	if !ok {
+	box, _ := boxofboxes.Get(who)
+	if box == nil {
 		ilog.Printf("no inbox to ping %s", who)
 		return
 	}
@@ -386,8 +387,8 @@ func ping(user *WhatAbout, who string) {
 }
 
 func pong(user *WhatAbout, who string, obj string) {
-	box, ok := boxofboxes.Get(who)
-	if !ok {
+	box, _ := boxofboxes.Get(who)
+	if box == nil {
 		ilog.Printf("no inbox to pong %s", who)
 		return
 	}
@@ -1104,11 +1105,18 @@ func thelistingoftheontologies(w http.ResponseWriter, r *http.Request) {
 		if utf8.RuneCountInString(o.Name) > 24 {
 			continue
 		}
+		if o.Count < 3 {
+			continue
+		}
 		o.Name = o.Name[1:]
 		onts = append(onts, o)
-		if o.Count > 1 {
-			pops = append(pops, o)
-		}
+		pops = append(pops, o)
+	}
+	if len(onts) > 1024 {
+		sort.Slice(onts, func(i, j int) bool {
+			return onts[i].Count > onts[j].Count
+		})
+		onts = onts[:1024]
 	}
 	sort.Slice(onts, func(i, j int) bool {
 		return onts[i].Name < onts[j].Name
@@ -1222,7 +1230,7 @@ func savetracks(tracks map[string][]string) {
 	dlog.Printf("saved %d new fetches", count)
 }
 
-var trackchan = make(chan Track)
+var trackchan = make(chan Track, 4)
 var dumptracks = make(chan chan bool)
 
 func tracker() {
@@ -1243,11 +1251,13 @@ func tracker() {
 		case c := <-dumptracks:
 			if len(tracks) > 0 {
 				savetracks(tracks)
+				tracks = make(map[string][]string)
 			}
 			c <- true
 		case <-endoftheworld:
 			if len(tracks) > 0 {
 				savetracks(tracks)
+				tracks = make(map[string][]string)
 			}
 			readyalready <- true
 			return
@@ -1269,7 +1279,10 @@ func requestActor(r *http.Request) string {
 func trackback(xid string, r *http.Request) {
 	who := requestActor(r)
 	if who != "" {
-		trackchan <- Track{xid: xid, who: who}
+		select {
+		case trackchan <- Track{xid: xid, who: who}:
+		default:
+		}
 	}
 }
 
@@ -1311,6 +1324,14 @@ func threadsort(honks []*Honk) []*Honk {
 	thread := make([]*Honk, 0, len(honks))
 	var nextlevel func(p *Honk)
 	level := 0
+	hasreply := func(p *Honk, who string) bool {
+		for _, h := range kids[p.XID] {
+			if h.Honker == who {
+				return true
+			}
+		}
+		return false
+	}
 	nextlevel = func(p *Honk) {
 		levelup := level < 4
 		if pp := honkx[p.RID]; p.RID == "" || (pp != nil && sameperson(p, pp)) {
@@ -1326,16 +1347,20 @@ func threadsort(honks []*Honk) []*Honk {
 		}
 		p.Style += fmt.Sprintf(" level%d", level)
 		childs := kids[p.XID]
-		if false {
-			sort.SliceStable(childs, func(i, j int) bool {
-				return sameperson(childs[i], p) && !sameperson(childs[j], p)
-			})
-		}
-		if true {
-			sort.SliceStable(childs, func(i, j int) bool {
-				return !sameperson(childs[i], p) && sameperson(childs[j], p)
-			})
-		}
+		sort.SliceStable(childs, func(i, j int) bool {
+			var ipts, jpts int
+			if sameperson(childs[i], p) {
+				ipts += 1
+			} else if hasreply(childs[i], p.Honker) {
+				ipts += 2
+			}
+			if sameperson(childs[j], p) {
+				jpts += 1
+			} else if hasreply(childs[j], p.Honker) {
+				jpts += 2
+			}
+			return ipts > jpts
+		})
 		for _, h := range childs {
 			if !done[h] {
 				done[h] = true
@@ -1473,7 +1498,7 @@ func showonehonk(w http.ResponseWriter, r *http.Request) {
 				h.Style += " glow"
 			}
 		}
-		if h.Public && (h.Whofore == 2 || h.IsAcked()) {
+		if h.Public && (h.Whofore == WhoPublic || h.IsAcked()) {
 			honks = append(honks, h)
 		}
 	}
@@ -1525,6 +1550,16 @@ func saveuser(w http.ResponseWriter, r *http.Request) {
 	options.InlineQuotes = r.FormValue("inlineqts") == "inlineqts"
 	options.MapLink = r.FormValue("maps")
 	options.Reaction = r.FormValue("reaction")
+	enabletotp := r.FormValue("enabletotp") == "enabletotp"
+	if enabletotp {
+		if options.TOTP == "" {
+			options.TOTP = totp.NewSecret()
+		}
+	} else {
+		if options.TOTP != "" {
+			options.TOTP = ""
+		}
+	}
 
 	sendupdate := false
 	ava := re_avatar.FindString(whatabout)
@@ -1613,7 +1648,7 @@ func bonkit(xid string, user *WhatAbout) {
 		URL:      xonk.URL,
 		Date:     dt,
 		Donks:    xonk.Donks,
-		Whofore:  2,
+		Whofore:  WhoPublic,
 		Convoy:   xonk.Convoy,
 		Audience: []string{thewholeworld, oonker},
 		Public:   true,
@@ -1651,6 +1686,7 @@ func submitbonk(w http.ResponseWriter, r *http.Request) {
 
 func sendzonkofsorts(xonk *Honk, user *WhatAbout, what string, aux string) {
 	zonk := &Honk{
+		Honker:   user.URL,
 		What:     what,
 		XID:      xonk.XID,
 		Date:     time.Now().UTC(),
@@ -1776,7 +1812,7 @@ func zonkit(w http.ResponseWriter, r *http.Request) {
 		xonk := getxonk(user.ID, what)
 		if xonk != nil {
 			deletehonk(xonk.ID)
-			if xonk.Whofore == 2 || xonk.Whofore == 3 {
+			if xonk.Whofore == WhoPublic || xonk.Whofore == WhoPrivate {
 				sendzonkofsorts(xonk, user, "zonk", "")
 			}
 		}
@@ -2168,9 +2204,9 @@ func submithonk(w http.ResponseWriter, r *http.Request) *Honk {
 	}
 
 	if honk.Public {
-		honk.Whofore = 2
+		honk.Whofore = WhoPublic
 	} else {
-		honk.Whofore = 3
+		honk.Whofore = WhoPrivate
 	}
 
 	// back to markdown
@@ -2931,13 +2967,14 @@ func enditall() {
 
 func bgmonitor() {
 	for {
-		when := time.Now().Add(-3 * 24 * time.Hour).UTC().Format(dbtimeformat)
-		_, err := stmtDeleteOldXonkers.Exec("pubkey", when)
+		time.Sleep(150 * time.Minute)
+		continue
+		when := time.Now().Add(-2 * 24 * time.Hour).UTC().Format(dbtimeformat)
+		_, err := stmtDeleteOldXonkers.Exec(when)
 		if err != nil {
 			elog.Printf("error deleting old xonkers: %s", err)
 		}
-		zaggies.Flush()
-		time.Sleep(50 * time.Minute)
+		xonkInvalidator.Flush()
 	}
 }
 
@@ -3021,9 +3058,27 @@ func startWatcher() {
 
 var usefcgi bool
 
+func doubleCheck(username string, r *http.Request) bool {
+	user, err := butwhatabout(username)
+	if err != nil {
+		return false
+	}
+	if user.Options.TOTP != "" {
+		code, _ := strconv.Atoi(r.FormValue("totpcode"))
+		return totp.CheckCode(user.Options.TOTP, code)
+	}
+	return true
+}
+
 func serve() {
 	db := opendatabase()
-	login.Init(login.InitArgs{Db: db, Logger: ilog, Insecure: develMode, SameSiteStrict: !develMode})
+	login.Init(login.InitArgs{
+		Db:             db,
+		Logger:         ilog,
+		Insecure:       develMode,
+		SameSiteStrict: !develMode,
+		SecondFactor:   doubleCheck,
+	})
 
 	listener, err := openListener()
 	if err != nil {

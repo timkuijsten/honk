@@ -28,6 +28,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/html"
@@ -35,6 +36,7 @@ import (
 	"humungus.tedunangst.com/r/webs/htfilter"
 	"humungus.tedunangst.com/r/webs/httpsig"
 	"humungus.tedunangst.com/r/webs/mz"
+	"humungus.tedunangst.com/r/webs/synlight"
 	"humungus.tedunangst.com/r/webs/templates"
 )
 
@@ -64,8 +66,10 @@ func loadLingo() {
 }
 
 func reverbolate(userid UserID, honks []*Honk) {
+	var handlers sync.WaitGroup
 	user, _ := somenumberedusers.Get(userid)
-	for _, h := range honks {
+	for i := range honks {
+		h := honks[i]
 		h.What += "ed"
 		if h.What == "honked" && h.RID != "" {
 			h.What = "honked back"
@@ -74,75 +78,79 @@ func reverbolate(userid UserID, honks []*Honk) {
 		if !h.Public {
 			h.Style += " limited"
 		}
-		if h.Whofore == 1 {
+		if h.Whofore == WhoAtme {
 			h.Style += " atme"
 		}
 		translate(h)
 		local := false
-		if h.Whofore == 2 || h.Whofore == 3 {
+		if h.Whofore == WhoPublic || h.Whofore == WhoPrivate {
 			local = true
 		}
 		if local && h.What != "bonked" {
 			h.Noise = re_memes.ReplaceAllString(h.Noise, "")
 		}
-		h.Username, h.Handle = handles(h.Honker)
-		if !local {
-			short := shortname(userid, h.Honker)
-			if short != "" {
-				h.Username = short
-			} else {
-				h.Username = h.Handle
-				if len(h.Username) > 20 {
-					h.Username = h.Username[:20] + ".."
-				}
-			}
-		}
-		if user != nil {
-			hset := []string{}
-			if h.Honker != user.URL {
-				hset = append(hset, "@"+h.Handle)
-			}
-			if user.Options.MentionAll {
-				for _, a := range h.Audience {
-					if a == h.Honker || a == user.URL {
-						continue
-					}
-					_, hand := handles(a)
-					if hand != "" {
-						hand = "@" + hand
-						hset = append(hset, hand)
+		handlers.Add(1)
+		go func() {
+			defer handlers.Done()
+			h.Username, h.Handle = handles(h.Honker)
+			if !local {
+				short := shortname(userid, h.Honker)
+				if short != "" {
+					h.Username = short
+				} else {
+					h.Username = h.Handle
+					if len(h.Username) > 20 {
+						h.Username = h.Username[:20] + ".."
 					}
 				}
 			}
-			h.Handles = strings.Join(hset, " ")
-		}
-		if h.URL == "" {
-			h.URL = h.XID
-		}
-		if h.Oonker != "" {
-			_, h.Oondle = handles(h.Oonker)
-		}
+			if user != nil {
+				hset := []string{}
+				if h.Honker != user.URL {
+					hset = append(hset, "@"+h.Handle)
+				}
+				if user.Options.MentionAll {
+					for _, a := range h.Audience {
+						if a == h.Honker || a == user.URL {
+							continue
+						}
+						_, hand := handles(a)
+						if hand != "" {
+							hand = "@" + hand
+							hset = append(hset, hand)
+						}
+					}
+				}
+				h.Handles = strings.Join(hset, " ")
+			}
+			if h.URL == "" {
+				h.URL = h.XID
+			}
+			if h.Oonker != "" {
+				_, h.Oondle = handles(h.Oonker)
+			}
+		}()
 		h.Precis = demoji(h.Precis)
 		h.Noise = demoji(h.Noise)
 		h.Open = "open"
 		var misto string
 		for _, m := range h.Mentions {
 			if m.Where != h.Honker && m.Where != h.Oonker && !m.IsPresent(h.Noise) {
-				misto += " " + m.Who
+				misto += string(templates.Sprintf(" <a href=\"%sh?xid=%s\">%s</a>", serverPrefix, url.QueryEscape(m.Where), m.Who))
 			}
 		}
 		var mistag string
 		for _, o := range h.Onts {
 			if !OntIsPresent(o, h.Noise) {
-				mistag += " " + o
+				mistag += string(templates.Sprintf(" <a href=\"%so/%s\">%s</a>", serverPrefix, o[1:], o))
 			}
 		}
 		if len(misto) > 0 || len(mistag) > 0 {
 			if len(misto) > 0 {
-				misto = "(" + misto[1:] + ")<p>"
+				misto = fmt.Sprintf("(%s)<p>", misto[1:])
 			}
 			if len(mistag) > 0 {
-				mistag = "<p>(" + mistag[1:] + ")"
+				mistag = fmt.Sprintf("<p>(%s)", mistag[1:])
 			}
 			h.Noise = misto + h.Noise + mistag
 		}
@@ -200,6 +208,7 @@ func reverbolate(userid UserID, honks []*Honk) {
 		}
 		h.Donks = h.Donks[:j]
 	}
+	handlers.Wait()
 
 	unsee(honks, userid)
 
@@ -362,7 +371,7 @@ func translate(honk *Honk) {
 	honk.Noise = noise
 	honk.Onts = append(honk.Onts, marker.HashTags...)
 	honk.Mentions = bunchofgrapes(marker.Mentions)
-	for _, t := range oneofakind(strings.Split(honk.Onties, " ")) {
+	for _, t := range oneofakind(strings.Split(strings.ToLower(honk.Onties), " ")) {
 		if t[0] != '#' {
 			t = "#" + t
 		}
@@ -622,7 +631,7 @@ func ontoreplacer(h string) string {
 }
 
 var re_unurl = regexp.MustCompile("https://([^/]+).*/([^/]+)")
-var re_urlhost = regexp.MustCompile("https://([^/ #)]+)")
+var re_urlhost = regexp.MustCompile("https://([^/ #)?]+)")
 
 func originate(u string) string {
 	m := re_urlhost.FindStringSubmatch(u)
@@ -632,24 +641,28 @@ func originate(u string) string {
 	return ""
 }
 
+var xonkInvalidator gencache.Invalidator[string]
+
 var allhandles = gencache.New(gencache.Options[string, string]{Fill: func(xid string) (string, bool) {
 	handle := getxonker(xid, "handle")
 	if handle == "" {
 		dlog.Printf("need to get a handle: %s", xid)
 		info, _, err := investigate(xid)
 		if err != nil {
+			dlog.Printf("failed to get handle: %s", err)
 			m := re_unurl.FindStringSubmatch(xid)
 			if len(m) > 2 {
 				handle = m[2]
 			} else {
 				handle = xid
 			}
+			savexonker(xid, handle, "handle")
 		} else {
 			handle = info.Name
 		}
 	}
 	return handle, true
-}})
+}, Invalidator: &xonkInvalidator})
 
 // handle, handle@host
 func handles(xid string) (string, string) {
@@ -726,16 +739,14 @@ var zaggies = gencache.New(gencache.Options[string, httpsig.PublicKey]{Fill: fun
 		j, err := GetJunk(readyLuserOne, keyname)
 		if err != nil {
 			ilog.Printf("error getting %s pubkey: %s", keyname, err)
-			when := time.Now().UTC().Format(dbtimeformat)
-			stmtSaveXonker.Exec(keyname, "failed", "pubkey", when)
+			savexonker(keyname, "failed", "pubkey")
 			return httpsig.PublicKey{}, true
 		}
 		allinjest(originate(keyname), j)
 		data = getxonker(keyname, "pubkey")
 		if data == "" {
 			ilog.Printf("key not found after ingesting")
-			when := time.Now().UTC().Format(dbtimeformat)
-			stmtSaveXonker.Exec(keyname, "failed", "pubkey", when)
+			savexonker(keyname, "failed", "pubkey")
 			return httpsig.PublicKey{}, true
 		}
 	}
@@ -749,7 +760,7 @@ var zaggies = gencache.New(gencache.Options[string, httpsig.PublicKey]{Fill: fun
 		return key, true
 	}
 	return key, true
-}, Limit: 512})
+}, Limit: 4096, Invalidator: &xonkInvalidator})
 
 func zaggy(keyname string) (httpsig.PublicKey, error) {
 	key, _ := zaggies.Get(keyname)
@@ -768,4 +779,10 @@ func keymatch(keyname string, actor string) string {
 		return origin
 	}
 	return ""
+}
+
+var lighter = synlight.New(synlight.Options{Format: synlight.HTML})
+
+func highlight(code, name string) string {
+	return "<pre><code>" + lighter.HighlightString(code, name) + "</code></pre>"
 }

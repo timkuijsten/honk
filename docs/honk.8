@@ -43,7 +43,7 @@ FastCGI can be used by prefixing the listen address with "fcgi:".
 .Ss Build
 Building
 .Nm
-requires a go compiler 1.18 and libsqlite.
+requires a go compiler 1.20+ and libsqlite 3.34.0+.
 On
 .Ox
 this is the go and sqlite3 packages.
@@ -156,12 +156,10 @@ and
 .Ss Storage
 By default,
 .Nm
-will store attachments in a blob database,
+will store attachments in a file system directory structure,
+.Pa attachments .
+Previous versions stored files in a database,
 .Pa blob.db .
-It may be more convenient to store attachments in the file system,
-in the
-.Pa attachments
-directory.
 Related commands:
 .Bl -tag -width extractblobs
 .It Ic storefiles
@@ -170,6 +168,7 @@ Switch to storing attachments in the file system.
 Switch to storing attachments in the blob.db.
 .It Ic extractblobs
 Copy blobs from the blob.db into the file system.
+Running cleanup first will reduce the time and space required.
 .El
 .Ss Maintenance
 The database may grow large over time.
@@ -287,10 +286,10 @@ The data directory contains:
 .Bl -tag -width views/local.css
 .It Pa honk.db
 The main database.
-.It Pa blob.db
-Media and attachment storage.
 .It Pa attachments
-Alternate location for media and attachment storage.
+Media and attachment storage.
+.It Pa blob.db
+Old location for media and attachment storage.
 .It Pa emus
 Custom emoji.
 .It Pa memes

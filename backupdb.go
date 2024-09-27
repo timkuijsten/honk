@@ -165,7 +165,9 @@ func svalbard(dirname string) {
 			var xid, name, description, url, media, meta string
 			var local int64
 			scanordie(rows, &fileid, &xid, &name, &description, &url, &media, &local, &meta)
-			filexids[xid] = true
+			if xid != "" {
+				filexids[xid] = true
+			}
 			doordie(tx, "insert into filemeta (fileid, xid, name, description, url, media, local, meta) values (?, ?, ?, ?, ?, ?, ?, ?)", fileid, xid, name, description, url, media, local, meta)
 		}
 		rows.Close()

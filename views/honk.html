@@ -1,4 +1,4 @@
-<article class="honk {{ .Honk.Style }}" data-convoy="{{ .Honk.Convoy }}" data-hname="{{ .Honk.Handles }}" data-xid="{{ .Honk.XID }}" data-id="{{ .Honk.ID }}">
+<article id="{{ .Honk.ShortXID }}" class="honk {{ .Honk.Style }}" data-convoy="{{ .Honk.Convoy }}" data-hname="{{ .Honk.Handles }}" data-xid="{{ .Honk.XID }}" data-id="{{ .Honk.ID }}">
 {{ $bonkcsrf := .BonkCSRF }}
 {{ $IsPreview := .IsPreview }}
 {{ $maplink := .MapLink }}
@@ -47,7 +47,7 @@ in reply to: <a href="{{ .RID }}" rel=noreferrer>{{ .RID }}</a>
 {{ end }}
 <br>
 {{ if $bonkcsrf }}
-<span class="left1em clip">convoy: <a class="convoylink" href="/t?c={{ .Convoy }}">{{ .Convoy }}</a></span>
+<span class="left1em clip">convoy: <a class="convoylink" href="/t?c={{ .Convoy }}#{{ .ShortXID }}">{{ .Convoy }}</a></span>
 {{ end }}
 </header>
 <p>

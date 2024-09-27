@@ -52,6 +52,7 @@ type UserOptions struct {
 	ChatCount    int64
 	ChatPubKey   string
 	ChatSecKey   string
+	TOTP         string `json:",omitempty"`
 }
 
 type KeyInfo struct {
@@ -84,7 +85,7 @@ type Honk struct {
 	Convoy    string
 	Audience  []string
 	Public    bool
-	Whofore   int64
+	Whofore   Whofore
 	Replies   []*Honk
 	Flags     int64
 	HTPrecis  template.HTML
@@ -102,6 +103,12 @@ type Honk struct {
 	Onties    string
 	LegalName string
 }
+
+type Whofore int
+
+const WhoAtme Whofore = 1
+const WhoPublic Whofore = 2
+const WhoPrivate Whofore = 3
 
 type Badonk struct {
 	Who  string
@@ -197,6 +204,10 @@ func (honk *Honk) IsUntagged() bool {
 
 func (honk *Honk) IsReacted() bool {
 	return honk.Flags&flagIsReacted != 0
+}
+
+func (honk *Honk) ShortXID() string {
+	return shortxid(honk.XID)
 }
 
 type Donk struct {

@@ -226,6 +226,7 @@ func upgradedb() {
 		setV(53)
 		fallthrough
 	case 53:
+		setcsrfkey()
 		try("analyze")
 		closedatabases()
 

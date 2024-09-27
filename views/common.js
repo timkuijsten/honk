@@ -1,4 +1,5 @@
 
+let re_link = /https?:[^ ]*/
 function hotkey(e) {
 	if (e.ctrlKey || e.altKey)
 		return
@@ -7,8 +8,27 @@ function hotkey(e) {
 		menu.open = false
 		return
 	}
-	if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
+	if (e.target instanceof HTMLInputElement)
 		return
+	if (e.target instanceof HTMLTextAreaElement) {
+		let k = e.key
+		if (!k.match(/^[a-zA-Z]$/)) return
+		let t = e.target
+		let start = t.selectionStart
+		let end = t.selectionEnd
+		if (start == end)
+			return
+		let val = t.value.substr(start, end-start)
+		if (val.match(re_link)) {
+			let s = t.value.substr(0, start)
+			let e = t.value.substr(end)
+			let repl = `[](${val})`
+			t.value = s + repl + e
+			t.selectionStart = start+1
+			t.selectionEnd = start+1
+		}
+		return
+	}
 
 	switch (e.code) {
 	case "KeyR":

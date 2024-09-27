@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"golang.org/x/crypto/nacl/box"
 	"humungus.tedunangst.com/r/webs/gencache"
@@ -104,16 +103,14 @@ var chatkeys = gencache.New(gencache.Options[string, boxPubKey]{Fill: func(xonke
 		j, err := GetJunk(readyLuserOne, xonker)
 		if err != nil {
 			ilog.Printf("error getting %s: %s", xonker, err)
-			when := time.Now().UTC().Format(dbtimeformat)
-			stmtSaveXonker.Exec(xonker, "failed", chatKeyProp, when)
+			savexonker(xonker, "failed", chatKeyProp)
 			return boxPubKey{}, true
 		}
 		allinjest(originate(xonker), j)
 		data = getxonker(xonker, chatKeyProp)
 		if data == "" {
 			ilog.Printf("key not found after ingesting")
-			when := time.Now().UTC().Format(dbtimeformat)
-			stmtSaveXonker.Exec(xonker, "failed", chatKeyProp, when)
+			savexonker(xonker, "failed", chatKeyProp)
 			return boxPubKey{}, true
 		}
 	}

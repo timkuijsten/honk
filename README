@@ -24,7 +24,7 @@ But you may need to get your hands dirty.
 ## build
 
 It should be sufficient to type make after unpacking a release.
-You'll need a go compiler version 1.18 or later. And libsqlite3.
+You'll need a go compiler version 1.20 or later. And libsqlite3 3.34.0+.
 
 Even on a fast machine, building from source can take several seconds.
 
@@ -35,11 +35,12 @@ Development sources: hg clone https://humungus.tedunangst.com/r/honk
 honk expects to be fronted by a TLS terminating reverse proxy.
 
 First, create the database. This will ask four questions.
+
 ./honk init
-username: (the username you want)
-password: (the password you want)
-listenaddr: (tcp or unix: 127.0.0.1:31337, /var/www/honk.sock, etc.)
-servername: (public DNS name: honk.example.com)
+listen address: (tcp or unix: 127.0.0.1:31337, /var/www/honk.sock, etc.)
+   server name: (public DNS name: honk.example.com)
+      username: (the username you want)
+      password: (the password you want)
 
 Then run honk.
 ./honk

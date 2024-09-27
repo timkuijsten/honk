@@ -139,8 +139,8 @@ func deliveration(doover Doover) {
 	if rcpt[0] == '%' {
 		inbox = rcpt[1:]
 	} else {
-		box, ok := boxofboxes.Get(rcpt)
-		if !ok {
+		box, _ := boxofboxes.Get(rcpt)
+		if box == nil {
 			ilog.Printf("failed getting inbox for %s", rcpt)
 			if doover.Tries < nearlyDead {
 				doover.Tries = nearlyDead

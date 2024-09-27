@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"humungus.tedunangst.com/r/webs/totp"
 )
 
 type cmd struct {
 	help     string
+	help2    string
 	callback func(args []string)
+	nargs    int
 }
 
 var commands = map[string]cmd{
@@ -38,29 +42,41 @@ var commands = map[string]cmd{
 		},
 	},
 	"import": {
-		help: "import data into honk",
+		help:  "import data into honk",
+		help2: "import username honk|mastodon|twitter srcdir",
 		callback: func(args []string) {
-			if len(args) != 4 {
-				errx("import username honk|mastodon|twitter srcdir")
-			}
 			importMain(args[1], args[2], args[3])
 		},
+		nargs: 4,
 	},
 	"export": {
-		help: "export data from honk",
+		help:  "export data from honk",
+		help2: "export username destdir",
 		callback: func(args []string) {
-			if len(args) != 3 {
-				errx("export username destdir")
-			}
 			export(args[1], args[2])
 		},
+		nargs: 3,
+	},
+	"dumpthread": {
+		help:  "export a thread for debugging",
+		help2: "dumpthread user convoy",
+		callback: func(args []string) {
+			dumpthread(args[1], args[2])
+		},
+		nargs: 3,
+	},
+	"rawimport": {
+		help:  "import activity objects for debugging",
+		help2: "rawimport username filename",
+		callback: func(args []string) {
+			rawimport(args[1], args[2])
+		},
+		nargs: 3,
 	},
 	"devel": {
-		help: "turn devel on/off",
+		help:  "turn devel on/off",
+		help2: "devel (on|off)",
 		callback: func(args []string) {
-			if len(args) != 2 {
-				errx("need an argument: devel (on|off)")
-			}
 			switch args[1] {
 			case "on":
 				setconfig("devel", 1)
@@ -70,13 +86,12 @@ var commands = map[string]cmd{
 				errx("argument must be on or off")
 			}
 		},
+		nargs: 2,
 	},
 	"setconfig": {
-		help: "set honk config",
+		help:  "set honk config",
+		help2: "setconfig key val",
 		callback: func(args []string) {
-			if len(args) != 3 {
-				errx("need an argument: setconfig key val")
-			}
 			var val interface{}
 			var err error
 			if val, err = strconv.Atoi(args[2]); err != nil {
@@ -84,6 +99,7 @@ var commands = map[string]cmd{
 			}
 			setconfig(args[1], val)
 		},
+		nargs: 3,
 	},
 	"adduser": {
 		help: "add a user to honk",
@@ -92,29 +108,25 @@ var commands = map[string]cmd{
 		},
 	},
 	"deluser": {
-		help: "delete a user from honk",
+		help:  "delete a user from honk",
+		help2: "deluser username",
 		callback: func(args []string) {
-			if len(args) < 2 {
-				errx("usage: honk deluser username")
-			}
 			deluser(args[1])
 		},
+		nargs: 2,
 	},
 	"chpass": {
-		help: "change password of an account",
+		help:  "change password of an account",
+		help2: "chpass username",
 		callback: func(args []string) {
-			if len(args) < 2 {
-				errx("usage: honk chpass username")
-			}
 			chpass(args[1])
 		},
+		nargs: 2,
 	},
 	"follow": {
-		help: "follow an account",
+		help:  "follow an account",
+		help2: "follow username url",
 		callback: func(args []string) {
-			if len(args) < 3 {
-				errx("usage: honk follow username url")
-			}
 			user, err := butwhatabout(args[1])
 			if err != nil {
 				errx("user %s not found", args[1])
@@ -129,13 +141,12 @@ var commands = map[string]cmd{
 				followyou(user, honkerid, true)
 			}
 		},
+		nargs: 3,
 	},
 	"unfollow": {
-		help: "unfollow an account",
+		help:  "unfollow an account",
+		help2: "unfollow username url",
 		callback: func(args []string) {
-			if len(args) < 3 {
-				errx("usage: honk unfollow username url")
-			}
 			user, err := butwhatabout(args[1])
 			if err != nil {
 				errx("user not found")
@@ -147,13 +158,12 @@ var commands = map[string]cmd{
 			}
 			unfollowyou(user, honkerid, true)
 		},
+		nargs: 3,
 	},
 	"sendmsg": {
-		help: "send a raw activity",
+		help:  "send a raw activity",
+		help2: "sendmsg username filename rcpt",
 		callback: func(args []string) {
-			if len(args) < 4 {
-				errx("usage: honk sendmsg username filename rcpt")
-			}
 			user, err := butwhatabout(args[1])
 			if err != nil {
 				errx("user %s not found", args[1])
@@ -164,6 +174,7 @@ var commands = map[string]cmd{
 			}
 			deliverate(user.ID, args[3], data)
 		},
+		nargs: 4,
 	},
 	"cleanup": {
 		help: "clean up stale data from database",
@@ -194,14 +205,13 @@ var commands = map[string]cmd{
 		},
 	},
 	"unplug": {
-		help: "disconnect from a dead server",
+		help:  "disconnect from a dead server",
+		help2: "unplug servername",
 		callback: func(args []string) {
-			if len(args) < 2 {
-				errx("usage: honk unplug servername")
-			}
 			name := args[1]
 			unplugserver(name)
 		},
+		nargs: 2,
 	},
 	"backup": {
 		help: "backup honk",
@@ -260,6 +270,15 @@ var commands = map[string]cmd{
 		help: "run backend",
 		callback: func(args []string) {
 			backendServer()
+		},
+	},
+	"totp": {
+		help: "generate totp code",
+		callback: func(args []string) {
+			if len(args) != 2 {
+				errx("usage: honk totp secret")
+			}
+			fmt.Printf("code: %d\n", totp.GenerateCode(args[1]))
 		},
 	},
 	"test": {

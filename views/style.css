@@ -448,3 +448,7 @@ li.details {
 .fontmonospace {
 	font-family: monospace;
 }
+div.footpad {
+	min-height: 14em;
+	border-top: 1px solid var(--fg-subtle);
+}

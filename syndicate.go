@@ -24,6 +24,11 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
+type Feed struct {
+	user *WhatAbout
+	url  string
+}
+
 func syndicate(user *WhatAbout, url string) {
 	data, err := fetchsome(url)
 	if err != nil {
@@ -43,20 +48,31 @@ func syndicate(user *WhatAbout, url string) {
 	}
 }
 
+func getfeeds() []Feed {
+	var feeds []Feed
+	users := allusers()
+	for _, ui := range users {
+		user, _ := butwhatabout(ui.Username)
+		honkers := gethonkers(user.ID)
+		for _, h := range honkers {
+			if strings.HasSuffix(h.XID, ".rss") {
+				feeds = append(feeds, Feed{user: user, url: h.XID})
+			}
+		}
+	}
+	return feeds
+}
+
 func syndicator() {
 	for {
-		dur := 8 * time.Hour
-		dur += time.Duration(notrand.Int63n(int64(dur / 4)))
-		time.Sleep(dur)
-		users := allusers()
-		for _, ui := range users {
-			user, _ := butwhatabout(ui.Username)
-			honkers := gethonkers(user.ID)
-			for _, h := range honkers {
-				if strings.HasSuffix(h.XID, ".rss") {
-					syndicate(user, h.XID)
-				}
-			}
+		pause := 4 * time.Hour
+		pause += time.Duration(notrand.Int63n(int64(pause / 4)))
+		feeds := getfeeds()
+		pause /= time.Duration(len(feeds) + 1)
+		time.Sleep(pause)
+		for _, f := range feeds {
+			syndicate(f.user, f.url)
+			time.Sleep(pause)
 		}
 	}
 }

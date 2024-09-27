@@ -1,6 +1,20 @@
 changelog
 
-### next
+### 1.4.1 Antiquated Automaton
+
++ Add back a scriptable init function.
+
++ Document that go 1.20+ is now required.
+
+### 1.4.0 Pink Peppercorn
+
++ Another tune up for thread sort.
+
++ Rework setup and admin screens.
+
++ Add some compat for forgefed activities.
+
++ TOTP for those who live dangerously.
 
 + Switch to storing attachments in the file system.
 

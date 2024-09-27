@@ -15,23 +15,6 @@
 
 package main
 
-/*
-#include <termios.h>
-
-void
-termecho(int on)
-{
-	struct termios t;
-	tcgetattr(1, &t);
-	if (on)
-		t.c_lflag |= ECHO;
-	else
-		t.c_lflag &= ~ECHO;
-	tcsetattr(1, TCSADRAIN, &t);
-}
-*/
-import "C"
-
 import (
 	"bufio"
 	"crypto/rand"
@@ -40,12 +23,12 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/signal"
 	"regexp"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 	"humungus.tedunangst.com/r/go-sqlite3"
+	"humungus.tedunangst.com/r/termvc"
 	"humungus.tedunangst.com/r/webs/httpsig"
 	"humungus.tedunangst.com/r/webs/login"
 )
@@ -78,21 +61,6 @@ func initdb() {
 		elog.Fatal(err)
 	}
 	alreadyopendb = db
-	defer func() {
-		os.Remove(dbname)
-		os.Remove(blobdbname)
-		os.Exit(1)
-	}()
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		C.termecho(1)
-		fmt.Printf("\n")
-		os.Remove(dbname)
-		os.Remove(blobdbname)
-		os.Exit(1)
-	}()
 
 	_, err = db.Exec("PRAGMA journal_mode=WAL")
 	if err != nil {
@@ -106,13 +74,108 @@ func initdb() {
 			return
 		}
 	}
-	r := bufio.NewReader(os.Stdin)
-
 	initblobdb(blobdbname)
 
 	prepareStatements(db)
 
-	err = createuser(db, r)
+	setcsrfkey()
+	setconfig("dbversion", myVersion)
+
+	setconfig("servermsg", "<h2>Things happen.</h2>")
+	setconfig("aboutmsg", "<h3>What is honk?</h3><p>Honk is amazing!")
+	setconfig("loginmsg", "<h2>login</h2>")
+	setconfig("devel", 0)
+
+	cleanup := func() {
+		os.Remove(dbname)
+		os.Remove(blobdbname)
+		os.Exit(1)
+	}
+	defer cleanup()
+
+	if !termvc.IsTerm() {
+		simplesetup(db)
+		return
+	}
+
+	termvc.Start()
+	defer termvc.Restore()
+	go termvc.Catch(cleanup)
+
+	app := termvc.NewApp()
+	t1 := termvc.NewTextArea()
+	t1.Value = "\n\n\tHello.\n\t\tWelcome to honk setup."
+	var inputs []termvc.Element
+	var offset int
+	listenfield := termvc.NewTextInput("listen address", &offset)
+	inputs = append(inputs, listenfield)
+	serverfield := termvc.NewTextInput("server name", &offset)
+	inputs = append(inputs, serverfield)
+	namefield := termvc.NewTextInput("username", &offset)
+	inputs = append(inputs, namefield)
+	passfield := termvc.NewPasswordInput("password", &offset)
+	inputs = append(inputs, passfield)
+	okay := false
+	btn := termvc.NewButton("let's go!")
+	left := 25
+	inputs = append(inputs, termvc.NewHPad(&left, btn, nil))
+	form := termvc.NewForm(inputs...)
+	t2 := termvc.NewTextArea()
+	group := termvc.NewVStack(t1, form, t2)
+	group.SetFocus(1)
+	app.Element = group
+	app.Screen = termvc.NewScreen()
+	btn.Submit = func() {
+		t2.Value = ""
+		addr := listenfield.Value
+		if len(addr) < 1 {
+			t2.Value += "listen address is way too short.\n"
+			elog.Print("that's way too short")
+			return
+		}
+		setconfig("listenaddr", addr)
+
+		addr = serverfield.Value
+		if len(addr) < 1 {
+			t2.Value += "server name is way too short.\n"
+			return
+		}
+		setconfig("servername", addr)
+		err = createuser(db, namefield.Value, passfield.Value)
+		if err != nil {
+			t2.Value += fmt.Sprintf("error: %s\n", err)
+			return
+		}
+		// must came later or user above will have negative id
+		err = createserveruser(db)
+		if err != nil {
+			elog.Print(err)
+			return
+		}
+		okay = true
+		app.Quit()
+	}
+
+	app.Loop()
+	if !okay {
+		return
+	}
+
+	db.Close()
+	termvc.Restore()
+	fmt.Printf("done.\n")
+	os.Exit(0)
+}
+
+func simplesetup(db *sql.DB) {
+	r := bufio.NewReader(os.Stdin)
+	fmt.Printf("username: ")
+	name, err := r.ReadString('\n')
+	name = name[:len(name)-1]
+	fmt.Printf("password: ")
+	pass, err := r.ReadString('\n')
+	pass = pass[:len(pass)-1]
+	err = createuser(db, name, pass)
 	if err != nil {
 		elog.Print(err)
 		return
@@ -148,20 +211,17 @@ func initdb() {
 		return
 	}
 	setconfig("servername", addr)
-	var randbytes [16]byte
-	rand.Read(randbytes[:])
-	key := fmt.Sprintf("%x", randbytes)
-	setconfig("csrfkey", key)
-	setconfig("dbversion", myVersion)
-
-	setconfig("servermsg", "<h2>Things happen.</h2>")
-	setconfig("aboutmsg", "<h3>What is honk?</h3><p>Honk is amazing!")
-	setconfig("loginmsg", "<h2>login</h2>")
-	setconfig("devel", 0)
 
 	db.Close()
 	fmt.Printf("done.\n")
 	os.Exit(0)
+}
+
+func setcsrfkey() {
+	var randbytes [16]byte
+	rand.Read(randbytes[:])
+	key := fmt.Sprintf("%x", randbytes)
+	setconfig("csrfkey", key)
 }
 
 func initblobdb(blobdbname string) {
@@ -193,28 +253,40 @@ func initblobdb(blobdbname string) {
 }
 
 func adduser() {
+	termvc.Start()
+	defer termvc.Restore()
+	go termvc.Catch(nil)
+
 	db := opendatabase()
-	defer func() {
-		os.Exit(1)
-	}()
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		C.termecho(1)
-		fmt.Printf("\n")
-		os.Exit(1)
-	}()
-
-	r := bufio.NewReader(os.Stdin)
-
-	err := createuser(db, r)
-	if err != nil {
-		elog.Print(err)
-		return
+	app := termvc.NewApp()
+	t1 := termvc.NewTextArea()
+	t1.Value = "\n\n\tHello.\n\t\tLet's invite a friend!"
+	var inputs []termvc.Element
+	var offset int
+	namefield := termvc.NewTextInput("username", &offset)
+	inputs = append(inputs, namefield)
+	passfield := termvc.NewPasswordInput("password", &offset)
+	inputs = append(inputs, passfield)
+	btn := termvc.NewButton("let's go!")
+	left := 25
+	inputs = append(inputs, termvc.NewHPad(&left, btn, nil))
+	form := termvc.NewForm(inputs...)
+	t2 := termvc.NewTextArea()
+	group := termvc.NewVStack(t1, form, t2)
+	group.SetFocus(1)
+	app.Element = group
+	app.Screen = termvc.NewScreen()
+	btn.Submit = func() {
+		t2.Value = ""
+		err := createuser(db, namefield.Value, passfield.Value)
+		if err != nil {
+			t2.Value += fmt.Sprintf("error: %s\n", err)
+			return
+		}
+		app.Quit()
 	}
 
-	os.Exit(0)
+	app.Loop()
 }
 
 func deluser(username string) {
@@ -244,66 +316,25 @@ func deluser(username string) {
 }
 
 func chpass(username string) {
+	panic("todo")
 	user, err := butwhatabout(username)
 	if err != nil {
 		elog.Fatal(err)
 	}
-	defer func() {
-		os.Exit(1)
-	}()
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		C.termecho(1)
-		fmt.Printf("\n")
-		os.Exit(1)
-	}()
-
 	db := opendatabase()
 	login.Init(login.InitArgs{Db: db, Logger: ilog})
 
-	r := bufio.NewReader(os.Stdin)
-
-	pass, err := askpassword(r)
-	if err != nil {
-		elog.Print(err)
-		return
-	}
+	pass := "password"
 	err = login.SetPassword(int64(user.ID), pass)
 	if err != nil {
 		elog.Print(err)
 		return
 	}
-	fmt.Printf("done\n")
-	os.Exit(0)
 }
 
-func askpassword(r *bufio.Reader) (string, error) {
-	C.termecho(0)
-	fmt.Printf("password: ")
-	pass, err := r.ReadString('\n')
-	C.termecho(1)
-	fmt.Printf("\n")
-	if err != nil {
-		return "", err
-	}
-	pass = pass[:len(pass)-1]
-	if len(pass) < 6 {
-		return "", fmt.Errorf("that's way too short")
-	}
-	return pass, nil
-}
-
-func createuser(db *sql.DB, r *bufio.Reader) error {
-	fmt.Printf("username: ")
-	name, err := r.ReadString('\n')
-	if err != nil {
-		return err
-	}
-	name = name[:len(name)-1]
+func createuser(db *sql.DB, name, pass string) error {
 	if len(name) < 1 {
-		return fmt.Errorf("that's way too short")
+		return fmt.Errorf("username is way too short")
 	}
 	if !re_plainname.MatchString(name) {
 		return fmt.Errorf("alphanumeric only please")
@@ -311,9 +342,8 @@ func createuser(db *sql.DB, r *bufio.Reader) error {
 	if _, err := butwhatabout(name); err == nil {
 		return fmt.Errorf("user already exists")
 	}
-	pass, err := askpassword(r)
-	if err != nil {
-		return err
+	if len(pass) < 6 {
+		return fmt.Errorf("password is way too short")
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(pass), 12)
 	if err != nil {

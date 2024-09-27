@@ -27,7 +27,7 @@ import (
 	"strings"
 )
 
-var storeTheFilesInTheFileSystem = false
+var storeTheFilesInTheFileSystem = true
 
 func hashfiledata(data []byte) string {
 	h := sha512.New512_256()
@@ -238,24 +238,26 @@ func cleanupfiles() {
 		return xid
 	}
 
-	filexids := make(map[string]bool)
+	fsFiles := make(map[string]bool)
+	dbFiles := make(map[string]bool)
 	if storeTheFilesInTheFileSystem {
 		walker := func(pathname string, ent fs.DirEntry, err error) error {
 			if ent.IsDir() {
 				return nil
 			}
 			fname := path.Base(pathname)
-			filexids[fname] = true
+			fsFiles[fname] = true
 			return nil
 		}
 		dir := os.DirFS(dataDir)
 		fs.WalkDir(dir, "attachments", walker)
-	} else {
+	}
+	if g_blobdb != nil {
 		rows, err = g_blobdb.Query("select xid from filedata")
 		checkErr(err)
 		for rows.Next() {
 			xid := scan()
-			filexids[xid] = true
+			dbFiles[xid] = true
 		}
 		rows.Close()
 	}
@@ -265,13 +267,18 @@ func cleanupfiles() {
 	checkErr(err)
 	for rows.Next() {
 		xid := scan()
-		delete(filexids, xid)
+		delete(fsFiles, xid)
+		delete(dbFiles, xid)
 	}
 	rows.Close()
 
 	tx, err := db.Begin()
 	checkErr(err)
-	for xid := range filexids {
+	for xid := range fsFiles {
+		_, err = tx.Exec("delete from filehashes where xid = ?", xid)
+		checkErr(err)
+	}
+	for xid := range dbFiles {
 		_, err = tx.Exec("delete from filehashes where xid = ?", xid)
 		checkErr(err)
 	}
@@ -279,15 +286,16 @@ func cleanupfiles() {
 	checkErr(err)
 
 	if storeTheFilesInTheFileSystem {
-		for xid := range filexids {
+		for xid := range fsFiles {
 			fname := filepath(xid)
-			ilog.Printf("should remove %s", fname)
-			//os.Remove(fname)
+			os.Remove(fname)
 		}
-	} else {
+
+	}
+	if g_blobdb != nil {
 		tx, err = g_blobdb.Begin()
 		checkErr(err)
-		for xid := range filexids {
+		for xid := range dbFiles {
 			_, err = tx.Exec("delete from filedata where xid = ?", xid)
 			checkErr(err)
 		}
