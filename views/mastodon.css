@@ -1,7 +1,262 @@
 html {
-	--bg-page: #353a49;
-	--bg-dark: #393f4f;
-	--fg: #fff;
-	--hl: #6364ff;
-	--fg-subtle: #606984
+	--bg-page: #eff3f5; /* body background */
+	--bg-dark: #fff;    /* main post column */
+	--fg: #3a3bff;      /* links in posts */
+	--hl: #c0cdd9;
+	--fg-subtle: #282c37;
+	--fg-limited: #282c37;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+#topspacer {
+	display: none;
+}
+
+body {
+	font-family: system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Oxygen,Ubuntu,Cantarell,Fira Sans,Droid Sans,Helvetica Neue,"mastodon-font-sans-serif",sans-serif;
+	font-size: 13px;
+	line-height: 18px;
+	font-weight: 400;
+	color: #000;
+}
+
+form, input, textarea {
+	font-family: inherit;
+	border: 0;
+}
+
+input, textarea {
+	border: 1px solid var(--hl);
+	border-radius: 4px;
+}
+
+input, textarea {
+	color: #000;
+}
+
+body > header {
+	margin: 0 auto;
+}
+
+h1, h2, h3, h4 {
+	font-weight: normal;
+}
+
+.honk .noise {
+	font-size: 15px;
+	line-height: 22px;
+}
+
+#infobox  {
+	border-top-left-radius: 4px;
+	border-top-right-radius: 4px;
+}
+
+main article:last-child {
+	border-bottom-left-radius: 4px;
+	border-bottom-right-radius: 4px;
+}
+
+main {
+	border: 1px solid var(--hl);
+	border-radius: 4px;
+	border-bottom: none;
+	font-size: 1.2em;
+	max-width: 600px;
+}
+
+.honk, .info {
+	border: 0;
+	border-bottom: 1px solid var(--hl);
+	border-radius: 0;
+	margin-bottom: 0;
+	padding: 16px;
+}
+
+.honk header {
+	color: #606984;
+	font-size: 15px;
+	font-weight: 500;
+	padding: 0;
+	margin: 0;
+	line-height: 22px;
+}
+
+details p a, .subtle .noise a {
+	color: var(--fg);
+}
+
+details summary {
+	color: var(--fg-subtle);
+}
+
+.buttonarray button, label.button, button, select {
+	background-color: #6d6eff;
+	border: 10px;
+	border-radius: 4px;
+	box-sizing: border-box;
+	color: #fff;
+	cursor: pointer;
+	font-size: 15px;
+	font-weight: 500;
+	font-family: inherit;
+	letter-spacing: 0;
+	line-height: 22px;
+	overflow: hidden;
+	padding: 7px 18px;
+	position: relative;
+	text-align: center;
+	text-decoration: none;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	width: auto;
+}
+
+button a, .honk button a {
+	color: #fff;
+}
+
+/*
+ * Honk form
+ */
+
+textarea#honknoise {
+	min-height: 100px;
+	padding-bottom: 0;
+	padding-right: 32px;
+	resize: none;
+	scrollbar-color: auto;
+	box-sizing: border-box;
+	width: 100%;
+	margin: 0;
+	padding: 10px;
+	font-family: inherit;
+	font-size: 14px;
+	border: 1px solid var(--hl);
+	outline: 0;
+}
+
+#honkform input[type=text] {
+	box-sizing: border-box;
+	font-size: 16px;
+	padding: 10px;
+}
+
+.skinny main {
+	padding: 0;
+}
+
+.honk header a, .honk header {
+	font-size: 15px;
+	line-height: 22px;
+	font-weight: 500;
+	color: #606984;
+}
+
+.honk a {
+	text-decoration: none;
+}
+
+.honk a:hover {
+	text-decoration: underline;
+}
+
+button::first-letter, label.button::first-letter {
+	text-transform: capitalize;
+}
+
+/*
+ * Menu
+ */
+
+#topmenu > span {
+	display: none;
+}
+
+header > details[open] {
+	background-color: var(--bg-page);
+	border: none;
+}
+
+header > details li a:hover {
+	color: #000;
+}
+
+header > details li a {
+	color: var(--fg-subtle);
+	font-size: 16px;
+	padding: 15px;
+	text-decoration: none;
+}
+
+header > details li::first-letter {
+	text-transform: capitalize;
+}
+
+header > details ul {
+	list-style: none;
+}
+
+@media (prefers-color-scheme: dark) {
+	html {
+		--bg-page: #191b22;
+		--bg-dark: #282c37;
+		--fg: #b9b9ba;
+		--fg: #d9e1e8;
+		--hl: #393f4f;
+		--fg-subtle: #606984;
+
+		scrollbar-color: #313543 rgba(0,0,0,.1);
+	}
+
+	body {
+		color: #fff;
+	}
+
+	input, textarea {
+		color: #9baec8;
+	}
+
+	.honk header {
+		color: #fff;
+	}
+
+	details p {
+		color: #fff;
+	}
+
+	.buttonarray button, label.button, button, select {
+		background-color: #6d6eff;
+		color: #fff;
+	}
+
+	button a, .honk button a {
+		color: #fff;
+	}
+
+	/*
+	 * Honk form
+	 */
+
+	textarea#honknoise {
+		border: 1px solid var(--hl);
+	}
+
+	.honk header a, .honk header {
+		color: #606984;
+	}
+
+	/*
+	 * Menu
+	 */
+
+	header > details[open] {
+		background-color: var(--bg-page);
+	}
+
+	header > details li a:hover {
+		color: #fff;
+	}
 }
