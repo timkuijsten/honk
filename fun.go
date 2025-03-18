@@ -578,19 +578,25 @@ func quickrename(s string, userid UserID) string {
 	return s
 }
 
-var shortnames = gencache.New(gencache.Options[UserID, map[string]string]{Fill: func(userid UserID) (map[string]string, bool) {
+var honkerdirectory = gencache.New(gencache.Options[UserID, map[string]*Honker]{Fill: func(userid UserID) (map[string]*Honker, bool) {
 	honkers := gethonkers(userid)
-	m := make(map[string]string)
+	m := make(map[string]*Honker)
 	for _, h := range honkers {
-		m[h.XID] = h.Name
+		m[h.XID] = h
 	}
 	return m, true
 }, Invalidator: &honkerinvalidator})
 
-func shortname(userid UserID, xid string) string {
-	m, ok := shortnames.Get(userid)
+func gethonker(userid UserID, xid string) *Honker {
+	m, ok := honkerdirectory.Get(userid)
 	if ok {
 		return m[xid]
+	}
+	return nil
+}
+func shortname(userid UserID, xid string) string {
+	if h := gethonker(userid, xid); h != nil {
+		return h.Name
 	}
 	return ""
 }

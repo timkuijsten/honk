@@ -1,5 +1,11 @@
 changelog
 
+### 1.4.2 Kindred Key
+
++ Fix shortcuts for alternate keymaps.
+
++ Add dehonk button.
+
 ### 1.4.1 Antiquated Automaton
 
 + Add back a scriptable init function.

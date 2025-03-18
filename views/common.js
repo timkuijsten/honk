@@ -30,20 +30,20 @@ function hotkey(e) {
 		return
 	}
 
-	switch (e.code) {
-	case "KeyR":
+	switch (e.key) {
+	case "r":
 		refreshhonks(document.getElementById("honkrefresher"));
 		break;
-	case "KeyS":
+	case "s":
 		oldestnewest(document.getElementById("newerscroller"));
 		break;
-	case "KeyJ":
+	case "j":
 		scrollnexthonk();
 		break;
-	case "KeyK":
+	case "k":
 		scrollprevioushonk();
 		break;
-	case "KeyM":
+	case "m":
 		var menu = document.getElementById("topmenu")
 		if (!menu.open) {
 			menu.open = true
@@ -52,7 +52,7 @@ function hotkey(e) {
 			menu.open = false
 		}
 		break
-	case "Slash":
+	case "/":
 		document.getElementById("topmenu").open = true
 		document.getElementById("searchbox").focus()
 		e.preventDefault()

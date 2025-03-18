@@ -152,7 +152,7 @@ var commands = map[string]cmd{
 				errx("user not found")
 			}
 
-			honkerid, err := gethonker(user.ID, args[2])
+			honkerid, err := findhonkerid(user.ID, args[2])
 			if err != nil {
 				errx("sorry couldn't find them")
 			}

@@ -946,25 +946,39 @@ func showuser(w http.ResponseWriter, r *http.Request) {
 	honkpage(w, u, honks, templinfo)
 }
 
+func honkerhat(userid UserID, xid string, r *http.Request) template.HTML {
+	var miniform template.HTML
+	sname := shortname(userid, xid)
+	if sname == "" {
+		sname = xid
+		miniform = templates.Sprintf(`<form action="/submithonker" method="POST">
+		<input type="hidden" name="CSRF" value="%s">
+		<input type="hidden" name="url" value="%s">
+		<button tabindex=1 name="add honker" value="add honker">add honker</button>
+		</form>`, login.GetCSRF("submithonker", r), xid)
+	} else {
+		honker := gethonker(userid, xid)
+		miniform = templates.Sprintf(`<form action="/submithonker" method="POST">
+		<input type="hidden" name="CSRF" value="%s">
+		<input type="hidden" name="honkerid" value="%d">
+		<input type="hidden" name="name" value="%s">
+		<input type="hidden" name="notes" value="%s">
+		<button tabindex=1 name="unsub" value="unsub">dehonk</button>
+		</form>`, login.GetCSRF("submithonker", r), honker.ID, honker.Name, honker.Meta.Notes)
+	}
+	msg := templates.Sprintf(`honks by honker: <a href="%s" ref="noreferrer">%s</a>%s`, xid, sname, miniform)
+	return msg
+}
+
 func showhonker(w http.ResponseWriter, r *http.Request) {
 	u := login.GetUserInfo(r)
-	name := mux.Vars(r)["name"]
-	var honks []*Honk
-	if name == "" {
-		name = r.FormValue("xid")
-		honks = gethonksbyxonker(UserID(u.UserID), name, 0)
-	} else {
-		honks = gethonksbyhonker(UserID(u.UserID), name, 0)
-	}
-	miniform := templates.Sprintf(`<form action="/submithonker" method="POST">
-<input type="hidden" name="CSRF" value="%s">
-<input type="hidden" name="url" value="%s">
-<button tabindex=1 name="add honker" value="add honker">add honker</button>
-</form>`, login.GetCSRF("submithonker", r), name)
-	msg := templates.Sprintf(`honks by honker: <a href="%s" ref="noreferrer">%s</a>%s`, name, name, miniform)
+	var userid = UserID(u.UserID)
+	xid := r.FormValue("xid")
+	honks := gethonksbyxonker(userid, xid, 0)
+	msg := honkerhat(userid, xid, r)
 	templinfo := getInfo(r)
 	templinfo["PageName"] = "honker"
-	templinfo["PageArg"] = name
+	templinfo["PageArg"] = xid
 	templinfo["ServerMessage"] = msg
 	templinfo["HonkCSRF"] = login.GetCSRF("honkhonk", r)
 	honkpage(w, u, honks, templinfo)
@@ -2731,13 +2745,7 @@ func webhydra(w http.ResponseWriter, r *http.Request) {
 	case "honker":
 		xid := r.FormValue("xid")
 		honks = gethonksbyxonker(userid, xid, wanted)
-		miniform := templates.Sprintf(`<form action="/submithonker" method="POST">
-			<input type="hidden" name="CSRF" value="%s">
-			<input type="hidden" name="url" value="%s">
-			<button tabindex=1 name="add honker" value="add honker">add honker</button>
-			</form>`, login.GetCSRF("submithonker", r), xid)
-		msg := templates.Sprintf(`honks by honker: <a href="%s" ref="noreferrer">%s</a>%s`, xid, xid, miniform)
-		hydra.Srvmsg = msg
+		hydra.Srvmsg = honkerhat(userid, xid, r)
 	case "user":
 		uname := r.FormValue("uname")
 		honks = gethonksbyuser(uname, u != nil && u.Username == uname, wanted)

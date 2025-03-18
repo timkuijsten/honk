@@ -103,7 +103,7 @@ func getserveruser() *WhatAbout {
 	return user
 }
 
-func gethonker(userid UserID, xid string) (int64, error) {
+func findhonkerid(userid UserID, xid string) (int64, error) {
 	row := opendatabase().
 		QueryRow("select honkerid from honkers where xid = ? and userid = ? and flavor in ('sub')", xid, userid)
 	var honkerid int64
@@ -269,7 +269,7 @@ func gethonksfromlongago(userid UserID, wanted int64) []*Honk {
 	params = append(params, wanted)
 	params = append(params, userid)
 	now := time.Now()
-	for i := 1; i <= 5; i++ {
+	for i := 1; i <= 6; i++ {
 		dt := time.Date(now.Year()-i, now.Month(), now.Day(), now.Hour(), now.Minute(),
 			now.Second(), 0, now.Location())
 		dt1 := dt.Add(-36 * time.Hour).UTC().Format(dbtimeformat)
